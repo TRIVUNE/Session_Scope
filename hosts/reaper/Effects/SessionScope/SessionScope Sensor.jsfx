@@ -1,0 +1,95 @@
+desc:SessionScope Sensor v0 (REAPER stand-in)
+//author: TRIVUNE
+//version: 0.1.0
+//tags: analysis diagnostic
+//
+// Put one instance on the master track. Audio passes through unchanged.
+//
+// Every audio block writes one record into the shared gmem segment "SessionScope_v0", which the
+// "SessionScope - Record trace" script drains to CSV. This is the REAPER-only stand-in for the
+// native VST3/CLAP sensor (docs/decisions/0002-jsfx-sensor-stand-in.md): same record, same ring.
+//
+// Ring layout (all values are doubles, see hosts/reaper/Scripts/SessionScope/lib/ring.lua):
+//   header  0 magic  1 layout  2 records written (published last)  3 capacity  4 slots per record
+//           5 owner id  6 owner heartbeat  7 other id  8 other heartbeat  9 sensor version
+//   record  0 t (time_precise, s)  1 frames  2 srate  3 play_state  4 play_position (s)
+//           5 beat_position (QN)  6 tempo  7 ts_num  8 ts_denom  9 sensor cost of the previous
+//           block (us)  10 sequence number  11 instance id
+//
+// Only one instance writes. A second instance stays silent and announces itself in the header so
+// the recorder can warn (test T10). Ownership passes on once the owner has not written for
+// HANDOVER seconds (a closed project, a removed instance); a live owner writes at least every
+// 50 ms even at 2048 samples and 44.1 kHz.
+//
+// Cost: about a dozen memory stores and two clock reads per block, 0.5-0.8 us median in REAPER 7.77.
+// There is no @sample section, so the audio itself is never touched.
+
+options:gmem=SessionScope_v0
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_noinit = 1;    // keep the instance id when the transport starts
+ext_nodenorm = 1;  // never add anti-denormal noise: the audio must pass through bit for bit
+
+// Layout constants; lib/ring.lua must use the same values (a test checks).
+MAGIC = 53530001;
+LAYOUT = 1;
+VERSION = 0.1;
+HDR = 16;          // header slots before the first record
+REC = 12;          // slots per record
+CAP = 32768;       // records in the ring: about 3 minutes at 48 kHz / 256
+HANDOVER = 0.25;   // seconds of owner silence before another instance takes over
+
+my_id = 0;         // this instance's id, picked on the first block
+prev_cost = 0;     // this sensor's own time in the previous block, in microseconds
+
+@block
+t0 = time_precise();
+
+// A random-enough id from the clock's sub-millisecond digits plus rand().
+my_id == 0 ? (
+  my_id = 1 + floor((t0 * 1000 - floor(t0 * 1000)) * 900000) + floor(rand(99999));
+);
+
+// Write if this instance owns the ring, nobody does, or the owner has gone quiet.
+owner = gmem[5];
+(owner == my_id || owner == 0 || t0 - gmem[6] > HANDOVER) ? (
+  owner != my_id ? (
+    // Taking over: claim the ring, and set up the header if it is missing or of another layout.
+    gmem[5] = my_id;
+    (gmem[0] != MAGIC || gmem[1] != LAYOUT || gmem[3] != CAP || gmem[4] != REC) ? (
+      gmem[2] = 0;
+      gmem[1] = LAYOUT;
+      gmem[3] = CAP;
+      gmem[4] = REC;
+      gmem[9] = VERSION;
+      gmem[0] = MAGIC;   // written last: the header is valid only once this is set
+    );
+  );
+  // Fill record n's slot, then publish it by raising the count. The reader never trusts a slot
+  // whose count has not been raised yet.
+  n = gmem[2];
+  p = HDR + (n % CAP) * REC;
+  gmem[p] = t0;
+  gmem[p + 1] = samplesblock;
+  gmem[p + 2] = srate;
+  gmem[p + 3] = play_state;
+  gmem[p + 4] = play_position;
+  gmem[p + 5] = beat_position;
+  gmem[p + 6] = tempo;
+  gmem[p + 7] = ts_num;
+  gmem[p + 8] = ts_denom;
+  gmem[p + 9] = prev_cost;
+  gmem[p + 10] = n;
+  gmem[p + 11] = my_id;
+  gmem[2] = n + 1;       // publish
+  gmem[6] = t0;          // heartbeat: this owner is alive
+  prev_cost = (time_precise() - t0) * 1000000;   // reported with the next record
+) : (
+  // Another instance owns the ring: stay silent, but let the recorder know this one exists.
+  gmem[7] = my_id;
+  gmem[8] = t0;
+);

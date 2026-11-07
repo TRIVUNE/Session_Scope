@@ -1,0 +1,46 @@
+desc:SessionScope Fixed Latency (test fixture F4)
+//author: TRIVUNE
+//version: 0.1.0
+//tags: utility test delay
+//
+// Delays audio by an exact number of samples and reports that delay to REAPER (PDC), so the
+// latency readings of SessionScope can be checked against a known value (spike C, test T02).
+
+slider1:delay_spl=1024<0,16384,1>Delay (samples)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_nodenorm = 1;
+RING = 16385;        // one more than the longest delay
+buf0 = 0;            // left channel's ring buffer starts at memory slot 0
+buf1 = RING;         // right channel's right after it
+wp = 0;              // write position in both rings
+
+@block
+// Declare the delay to REAPER so it can compensate. Done here rather than in @slider because
+// @init clears variables when playback starts; only change it when it really changed.
+d = floor(delay_spl + 0.5);
+pdc_delay != d ? (
+  pdc_delay = d;
+  pdc_bot_ch = 0;    // channels 0 and 1 (left, right) are delayed
+  pdc_top_ch = 2;
+);
+
+@sample
+// A plain ring-buffer delay: read the sample written d samples ago, then write the new one.
+d > 0 ? (
+  rp = wp - d;
+  rp < 0 ? rp += RING;
+  o0 = buf0[rp];
+  o1 = buf1[rp];
+  buf0[wp] = spl0;
+  buf1[wp] = spl1;
+  spl0 = o0;
+  spl1 = o1;
+  wp += 1;
+  wp >= RING ? wp = 0;
+);

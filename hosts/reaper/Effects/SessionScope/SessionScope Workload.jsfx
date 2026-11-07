@@ -1,0 +1,52 @@
+desc:SessionScope Workload (test load, fixture F7)
+//author: TRIVUNE
+//version: 0.2.0
+//tags: utility test
+//
+// Burns a known amount of CPU time in every audio block, so SessionScope's measurements can be
+// checked against it. Audio passes through unchanged. For test projects only.
+//
+// Cost per block = base + step * floor((position - from) / step length), inside the window
+// [from, to) in quarter notes (to = 0: no end), and 0 outside it. Positions are quarter notes so
+// the window stays put when the time signature changes. Fixed mode spends that many microseconds
+// per block; proportional mode spends that many per 256 samples, so the share of the audio
+// deadline stays the same at any buffer size.
+//
+// The recorder computes the same cost from these sliders (lib/workload.lua): keep both in step.
+
+slider1:cost_us=0<0,8000,1>Base cost (us)
+slider2:mode=0<0,1,1{Fixed time per block,Proportional (us per 256 samples)}>Mode
+slider3:from_qn=0<0,4096,0.25>Active from (QN)
+slider4:to_qn=0<0,4096,0.25>Active until (QN, 0 = no end)
+slider5:step_us=0<0,8000,1>Staircase step (us, 0 = none)
+slider6:step_qn=8<0.25,4096,0.25>Staircase step length (QN)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_nodenorm = 1;   // leave the audio exactly as it came in
+
+@block
+// How long to burn in this block, from the transport position (quarter notes).
+q = beat_position;
+active = (q >= from_qn) && (to_qn <= 0 || q < to_qn);
+target = 0;
+active ? (
+  target = cost_us;
+  (step_us > 0 && step_qn > 0) ? target += step_us * floor((q - from_qn) / step_qn);
+  mode == 1 ? target *= samplesblock / 256;
+);
+// Busy-wait until the time is up. The inner loop does a little work between clock reads so the
+// clock is not read millions of times; JSFX caps a while() at about a million rounds, far more
+// than the 8 ms maximum needs.
+target > 0 ? (
+  t_end = time_precise() + target / 1000000;
+  sink = 0;
+  while (
+    loop(64, sink += 1);
+    time_precise() < t_end;
+  );
+);

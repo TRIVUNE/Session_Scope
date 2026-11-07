@@ -1,0 +1,47 @@
+SessionScope trace song  [SYNTHETIC: generated, not measured]
+simulated - · simulated 48000 Hz, 256 samples (5.33 ms deadline) · project song (synthetic)
+41,792 sensor blocks over 228 s · 0 lost · 0 sensor restarts · 4 passes · 2 host audio xruns · 41,792 host blocks timed
+
+Passes
+   #  how it began  bars       blocks
+   1  start           1–64      24,450
+   2  start          33–48       5,625
+   3  jump_back      33–48       5,625
+   4  jump_back      33–48       5,625
+
+Late callbacks (sensor estimate): p99 per bar, share of a block
+          1       9       17      25      33      41      49      57      
+Pass 1    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁!!!▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+Pass 2                                    ▁▁▁▁▁▁▁▁▇!!▁▁▁▁▁                
+Pass 3                                    ▁▁▁▁▁▁▁▂▆!▇▁▁▁▁▁                
+Pass 4                                    ▁▁▁▁▁▁▁▁!!!▁▁▁▁▁                
+Median    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁!!!▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+          ▁ normal  ▃ elevated ≥10%  ▅ at risk ≥20%  ▇ overrun ≥40%  · too few blocks
+
+Realtime CPU (host audio thread): p99 per bar, share of the deadline
+          1       9       17      25      33      41      49      57      
+Pass 1    ▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▇▇▇▇▇▇▇▇!!!▇▇▇▇▇▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+Pass 2                                    ▇▇▇▇▇▇▇▇!!!▇▇▇▇▇                
+Pass 3                                    ▇▇▇▇▇▇▇▇!!!▇▇▇▇▇                
+Pass 4                                    ▇▇▇▇▇▇▇▇!!!▇▇▇▇▇                
+Median    ▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▇▇▇▇▇▇▇▇!!!▇▇▇▇▇▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+          ▃ normal  ▆ elevated ≥70%  ▇ at risk ≥85%  █ overrun ≥100%  · too few blocks
+
+Observations
+  - Bars 41–43 are the hottest stretch: late callbacks (sensor estimate) p99 up to 43% (overrun), median of up to 4 pass(es).
+  - Bars 33–48 are the hottest stretch: realtime cpu (host audio thread) p99 up to 104% (overrun), median of up to 4 pass(es).
+  - The host reported an audio xrun at bar 41 (pass 2).
+  - The host reported an audio xrun at bar 42 (pass 4).
+  - Sensor's own cost per block: median 1.2 µs, p99 1.6 µs, max 1.8 µs.
+
+S1 bar mapping: PASS
+  Bar from the sensor's quarter notes agrees with the host's bar in 100% of 41,325 playing blocks.
+  Sensor quarter notes vs the host's for the same time: max difference 0.000000 QN.
+  Sensor position minus the host's play position: median -2.6 ms, p99 |offset| 5.3 ms (6771 samples).
+
+S2 lateness proxy: NO DATA
+  No known workload in this trace, so there is nothing to compare with. The REAPER fixtures F7a and F7b have one.
+
+S2 proxy vs realtime CPU: INCONCLUSIVE
+  Rank correlation, per bar, between the host's realtime CPU p99 and the lateness proxy p99: +0.61 (64 bars).
+  Bars at or above 85% realtime CPU: 16; the proxy's median there is 7% of a block, elsewhere 3%.

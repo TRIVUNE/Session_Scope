@@ -1,0 +1,57 @@
+SessionScope trace staircase  [SYNTHETIC: generated, not measured]
+simulated - · simulated 48000 Hz, 256 samples (5.33 ms deadline) · project staircase (synthetic)
+18,280 sensor blocks over 101 s · 0 lost · 0 sensor restarts · 2 passes · 2 host audio xruns · 18,280 host blocks timed
+
+Passes
+   #  how it began  bars       blocks
+   1  start           1–24       9,000
+   2  jump_back       1–24       9,000
+
+Late callbacks (sensor estimate): p99 per bar, share of a block
+          1       9       17      
+Pass 1    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▅▄!!!!
+Pass 2    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▅▅!!!!
+Median    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▅▅!!!!
+          ▁ normal  ▃ elevated ≥10%  ▅ at risk ≥20%  ▇ overrun ≥40%  · too few blocks
+
+Realtime CPU (host audio thread): p99 per bar, share of the deadline
+          1       9       17      
+Pass 1    ▁▁▁▁▂▂▃▃▄▄▄▄▅▅▆▆▇▇▇█!!!!
+Pass 2    ▁▁▁▁▂▂▃▃▄▄▄▄▅▅▆▆▇▇▇█!!!!
+Median    ▁▁▁▁▂▂▃▃▄▄▄▄▅▅▆▆▇▇▇█!!!!
+          ▃ normal  ▆ elevated ≥70%  ▇ at risk ≥85%  █ overrun ≥100%  · too few blocks
+
+Observations
+  - Bars 19–24 are the hottest stretch: late callbacks (sensor estimate) p99 up to 97% (overrun), median of up to 2 pass(es).
+  - Bars 17–24 are the hottest stretch: realtime cpu (host audio thread) p99 up to 120% (overrun), median of up to 2 pass(es).
+  - The host reported an audio xrun at bar 23 (pass 2).
+  - The host reported an audio xrun at bar 23 (pass 2).
+  - Sensor's own cost per block: median 1.2 µs, p99 1.6 µs, max 1.7 µs.
+
+S1 bar mapping: PASS
+  Bar from the sensor's quarter notes agrees with the host's bar in 100% of 18,000 playing blocks.
+  Sensor quarter notes vs the host's for the same time: max difference 0.000000 QN.
+  Sensor position minus the host's play position: median -2.5 ms, p99 |offset| 5.3 ms (2992 samples).
+
+S2 lateness proxy: INCONCLUSIVE
+   Known load  bars   late p99 (median of bars)    Host xruns
+          0%     4                       3.1%             0
+          9%     4                       2.9%             0
+         19%     4                       3.2%             0
+         28%     4                       3.0%             0
+         38%     4                       3.2%             0
+         47%     4                       2.9%             0
+         56%     4                       3.2%             0
+         66%     4                       3.3%             0
+         75%     4                       3.1%             0
+         84%     4                      28.0%             0
+         94%     4                      53.2%             0
+        103%     4                      94.9%             2
+  Rank correlation between known load and the lateness proxy, per bar: +0.66 (48 bars).
+  The proxy stays near its idle level (3.1%) until 84% known load, then rises: it signals deadline pressure, not load in general.
+  The host reported 2 audio xrun(s) while recording.
+  Reading: a weak relation. Repeat with anticipative FX off (F7b) and a smaller buffer before deciding.
+
+S2 proxy vs realtime CPU: INCONCLUSIVE
+  Rank correlation, per bar, between the host's realtime CPU p99 and the lateness proxy p99: +0.66 (24 bars).
+  Bars at or above 85% realtime CPU: 8; the proxy's median there is 41% of a block, elsewhere 3%.

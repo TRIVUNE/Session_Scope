@@ -1,0 +1,72 @@
+# SessionScope: status and next steps
+
+Last updated 6 November 2026. The working plan and next steps in one place: [guide.md](guide.md). Phases follow the blueprint's build plan (P0 → P7, gate G1).
+Where things are in the repository: see the table in [README.md](README.md).
+
+## Done
+
+### P0: foundations
+- [x] Repository layout, `.gitignore`, `.editorconfig`, CI workflow (`.github/workflows/ci.yml`: Lua syntax check and tests; engine build and tests; VST3 and CLAP validators on Windows; the macOS build with all three validators)
+- [x] Decision log and records (`docs/decisions/`), research record per spike (`docs/research/`), metric dictionary (`docs/metrics.md`)
+- [x] Test fixtures F1–F5, F7a, F7b built by script through REAPER's API (`hosts/reaper/Scripts/SessionScope/lib/fixtures.lua`), F6 (broken streams) in the simulator
+- [x] Synthetic workload JSFX with a known, steppable cost (F7) and a fixed-latency JSFX (F4)
+
+### P1: REAPER proof of concept
+- [x] **Sensor v0** as a JSFX on the master track: one record per audio block into shared memory (`SessionScope Sensor.jsfx`)
+- [x] **Recorder** script: sensor ring, transport, REAPER's xruns and the known workload into a trace folder (`SessionScope - Record trace.lua`)
+- [x] **Inventory** script: tracks, FX, GUIDs, containers, input FX, declared delay (`SessionScope - Inventory.lua`)
+- [x] **VST3 sensor** (`native/vst3_sensor`, built with the MIT VST3 SDK) + **HUD window** (`build/engine/SessionScopeHUD.exe`) fed through shared memory. Verified in real REAPER 7.77: 2,599 blocks, none lost, sensor cost 0.3 us median
+- [x] **Analyser** (`engine/`, C++; `sessionscope report`): passes, per-bar p99 heatmap, observations, S1/S2 checks, JSON output
+- [x] **REAPER extension** measuring REAPER's realtime CPU per block (`hosts/reaper/extension/`), built with a pinned compiler (`tools/get_zig.py`, `tools/build_native.py`)
+- [x] **Headless validation** in a real REAPER with an isolated settings folder and the silent dummy audio device (`hosts/reaper/tools/reaper_validate.py`); your own REAPER setup is not touched
+- [x] Tests: 49 Lua tests against a fake REAPER and 15 C++ engine test programs, all passing
+
+### Results so far (REAPER 7.77, dummy audio 48 kHz / 256)
+| Spike | Result |
+| --- | --- |
+| A, inventory | Passed: 7 fixtures, containers, input FX, duplicate names all correct |
+| B, transport | Passed: starts, stops, seeks, loop wraps and tempo changes tracked, no false continuity |
+| C, plugin delay | Passed for JSFX: exact in every slot; bypassed FX report 0 |
+| D, CPU per FX/track | Not available from REAPER. **Total realtime CPU is**: the extension tracks a known load within 1.5 points |
+| E, overhead | Sensor: p99 ≈ 2 µs per block (0.04 % of the deadline) |
+| S1, bar mapping | Passed: 100 % agreement across tempo changes, seeks and loops |
+| S2, lateness proxy | Can't be judged on the dummy device; needs a real interface |
+| T10, two sensors | Passed: warned, one writer recorded, no false alarm when switching projects |
+
+Two findings that shape gate G1:
+1. With anticipative FX **off**, realtime CPU from the extension is an accurate load measurement.
+2. With anticipative FX **on** (REAPER's default), the audio thread looks idle until the render-ahead runs dry. Realtime CPU then gives no early warning.
+
+## To do
+
+### Now: finish P1 (needs you at the computer)
+- [ ] **S2 on your audio interface.** Install into your REAPER (`python hosts/reaper/tools/reaper_install.py`), copy `build/native/reaper_sessionscope.dll` to `%APPDATA%\REAPER\UserPlugins\`, restart REAPER. Open `SessionScope/fixtures/F7b/F7b.rpp` with the Komplete Audio ASIO driver at 48 kHz / 256, run *SessionScope - Record trace*, play bars 1–24 twice, stop. Repeat with F7a, then both at 128 samples. Then `build/engine/sessionscope.exe report` for each. Steps in `docs/research/S2-lateness.md`.
+- [ ] **Spike E.** On fixture F2, note REAPER's Performance Meter (RT CPU, longest block) with nothing loaded, then with the sensor, then with sensor + recorder + extension.
+- [ ] **Spike C with real plugins.** Add a third-party linear-phase EQ and a look-ahead limiter, run *SessionScope - Inventory*, compare the reported delay with REAPER's own PDC display in the FX window.
+
+### Next: finish P1 (can be done without you)
+- [ ] Look for a documented way to read REAPER's anticipative render-ahead margin (the early warning for finding 2).
+- [x] Fixture F8 with time-signature changes: REAPER's bars right; the JSFX's quarter notes drift inside 7/8 (S1 note).
+- [x] FX identity across rename, reorder, copy, move and save + reopen: passed 10/10 (spike A note).
+- [x] VST3 sensor records the host's bar start (`barPositionMusic`, layout 2); the HUD counts bars from it.
+- [x] VST3: Steinberg's `validator` passes (47/47); installed as a proper `.vst3` bundle.
+- [x] CLAP sensor (`native/clap_sensor`): `clap-validator` 18 passed, 0 failed (26 skipped: features the sensor has none of), and a test host reads its records back (`python tools/run_clap_validator.py`).
+- [ ] Test the VST3 and CLAP sensors in other hosts (Bitwig, Cubase, Live); then S3 (probe pairs) if still wanted.
+- [x] HUD rebuilt as a web UI (Electron window) with realtime CPU from the extension's shared memory and a CPU-per-bar chart.
+- [x] Engine and HUD ported to C++ (`engine/`): one native process instead of Python + Electron; the Python analyser and the web HUD are removed.
+- [x] HUD: remembers its window and choices, compact mode, click a bar to see its blocks.
+- [ ] HUD: a settings panel, an installer (see guide.md).
+
+### Gate G1: choose the MVP path
+- [ ] Write the decision record: path B (bar heatmap + latency + before/after comparisons) looks likely, since per-FX/per-track CPU isn't available. Decide which metric the heatmap shows in REAPER: realtime CPU (extension), the sensor proxy (after S2), or both.
+
+### P2 onward (after G1)
+- [ ] P2: versioned measurement schema, local connection between sensor/extension and the HUD, storage, reconnect, golden-trace replay tests.
+- [ ] P3: statistics engine, the heatmap UI, recommendation rules, before/after comparison workflow.
+- [ ] P4: Windows installer (sensor + extension + scripts + HUD), private alpha, then closed beta.
+- [ ] P5: other DAWs. The VST3, CLAP and Audio Unit sensors exist and pass their validators (decision 0005); not yet tried in hosts other than REAPER. P6: paid launch.
+- [ ] AAX (Pro Tools): blocked, needs an Avid developer account.
+
+## Housekeeping
+- REAPER here is 7.83 since validation run 4 (30 Oct), the version the blueprint pins; runs 1-3 were on 7.77.
+- Build output (`build/`) and the compiler (`.toolchain/`) are not in git; `python tools/setup.py` recreates them.
