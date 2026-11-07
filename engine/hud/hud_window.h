@@ -1,5 +1,5 @@
-// HUD window: GLFW + OpenGL 3.3 core context + ImGui backends.
-// Creates an always-on-top window with a dark background from the first frame, on Windows and macOS.
+// HUD window: GLFW for the window and input, a Renderer (renderer.h) for drawing, Dear ImGui on top.
+// Creates an always-on-top window, black from the first frame, on Windows and macOS.
 
 #ifndef SESSIONSCOPE_HUD_WINDOW_H
 #define SESSIONSCOPE_HUD_WINDOW_H
@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "hud_settings.h"
+#include "renderer.h"
 
 struct GLFWwindow;
 
@@ -28,7 +29,7 @@ struct HudWindowOptions {
 
 class HudWindow {
 public:
-    // Factory: returns null and sets error on failure (e.g. no OpenGL 3.3).
+    // Factory: returns null and sets error on failure (e.g. no Direct3D 11 / OpenGL 3.3).
     static std::unique_ptr<HudWindow> create(const HudWindowOptions &opts, std::string &error);
 
     ~HudWindow();
@@ -46,6 +47,11 @@ public:
     void wait_for_input(double seconds);
     // Seconds between display refreshes of the screen the window is on (1/60 if unknown).
     double frame_period() const;
+    // True if begin_frame() itself waits for the display (Windows), so the caller needn't sleep
+    // to pace frames.
+    bool paces_frames() const { return renderer_->paces_frames(); }
+    // Where the view puts its pictures (the core heatmap).
+    TextureStore &textures() { return *renderer_; }
     void begin_frame();
     void end_frame();
     int width() const;
@@ -74,7 +80,7 @@ private:
     bool save_screenshot(const std::filesystem::path &path) const;
 
     GLFWwindow *window_ = nullptr;
-    bool own_context_ = false;  // true if we created the ImGui context
+    std::unique_ptr<Renderer> renderer_;
     std::filesystem::path screenshot_path_;
     bool screenshot_saved_ = false;
 };

@@ -205,11 +205,13 @@ def build_glfw() -> list[Path]:
 
 
 # -----------------------------------------------------------------------------
-# ImGui (core + GLFW + OpenGL3 backends) — compiled once as C++ sources
+# ImGui (core + GLFW backend + the renderer's backend) — compiled once as C++ sources.
+# Windows draws with Direct3D 11 (engine/hud/renderer_d3d11.cpp), macOS with OpenGL 3.3.
 
 IMGUI_SOURCES = [
     "imgui.cpp", "imgui_draw.cpp", "imgui_tables.cpp", "imgui_widgets.cpp",
-    "backends/imgui_impl_glfw.cpp", "backends/imgui_impl_opengl3.cpp",
+    "backends/imgui_impl_glfw.cpp",
+    "backends/imgui_impl_opengl3.cpp" if IS_MAC else "backends/imgui_impl_dx11.cpp",
 ]
 
 def imgui_object_path(name: str) -> Path:
@@ -288,12 +290,13 @@ def link_hud(engine_objects: list[Path], glfw_objects: list[Path],
         print(f"  up to date {HUD_EXE.name}")
 
 
-# What the HUD links against: the system's windowing and OpenGL libraries.
+# What the HUD links against: the system's windowing and graphics libraries.
 if IS_MAC:
     HUD_LINK_FLAGS = ["-framework", "Cocoa", "-framework", "IOKit", "-framework", "OpenGL",
                       "-framework", "CoreFoundation", "-framework", "QuartzCore"]
 else:
-    HUD_LINK_FLAGS = ["-lopengl32", "-lgdi32", "-luser32", "-lshell32", "-lwinmm", "-Wl,--subsystem,windows"]
+    HUD_LINK_FLAGS = ["-ld3d11", "-ldxgi", "-ldcomp", "-ld3dcompiler_47", "-lgdi32", "-luser32", "-lshell32",
+                      "-lwinmm", "-Wl,--subsystem,windows"]
 
 
 def build_hud(engine_objects: list[Path]) -> None:

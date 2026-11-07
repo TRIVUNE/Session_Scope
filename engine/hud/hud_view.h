@@ -19,6 +19,7 @@
 
 #include "hud_engine.h"
 #include "hud_settings.h"
+#include "renderer.h"
 
 struct ImFont;
 struct ImDrawList;
@@ -36,7 +37,7 @@ public:
     // Loads fonts. `layout_scale` turns the web HUD's CSS pixels into window units;
     // `font_oversample` rasterises text that much finer (2 on a Retina Mac). Call once, before
     // the first frame.
-    HudView(double layout_scale, double font_oversample);
+    HudView(TextureStore &textures, double layout_scale, double font_oversample);
     ~HudView();
     HudView(const HudView &) = delete;
     HudView &operator=(const HudView &) = delete;
@@ -100,7 +101,8 @@ private:
     std::map<int, std::vector<int>> columns_;
     std::optional<int> newest_column_;
     double newest_arrived_at_ = 0;       // when the newest column came, for the smooth slide
-    unsigned int texture_ = 0;           // OpenGL texture of the visible columns
+    TextureStore &textures_;
+    ImTextureID texture_ = 0;            // texture of the visible columns
     bool texture_dirty_ = true;
 
     double peak_value_ = 0;              // the level meter's 3-second peak hold

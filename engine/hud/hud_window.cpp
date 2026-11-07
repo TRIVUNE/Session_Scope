@@ -1,5 +1,5 @@
-// HUD window implementation: GLFW + OpenGL 3.3 core + ImGui.
-// Dark background from the first frame, always-on-top, VSync on.
+// HUD window implementation: GLFW window + Renderer (renderer.h) + ImGui.
+// Black from the first frame, always-on-top, in step with the display.
 // Screenshots as PNG files, through stb_image_write.
 
 #include "hud_window.h"
@@ -8,9 +8,6 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
-
-#include "gl.h"
 
 #include <algorithm>
 #include <array>
@@ -46,10 +43,7 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
         return nullptr;
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    Renderer::set_window_hints();
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);  // stay hidden until first frame is ready
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
     glfwWindowHint(GLFW_FLOATING, opts.always_on_top ? GLFW_TRUE : GLFW_FALSE);   // above other windows
@@ -57,7 +51,7 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
     GLFWwindow *window = glfwCreateWindow(opts.width, opts.height, opts.title.c_str(), nullptr, nullptr);
     if (!window) {
         glfwTerminate();
-        error = "Failed to create GLFW window (OpenGL 3.3 core not available?)";
+        error = "Failed to create the HUD window.";
         return nullptr;
     }
 
@@ -68,39 +62,29 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
         glfwSetWindowPos(window, opts.place->x, opts.place->y);
     }
 
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);  // VSync on
+    auto hud = std::unique_ptr<HudWindow>(new HudWindow(window));
 
-    // Dark background from the first frame: clear before showing
-    glClearColor(0.11f, 0.11f, 0.11f, 1.0f);  // #1c1c1c
-    glClear(GL_COLOR_BUFFER_BIT);
-    glfwSwapBuffers(window);
-
-    glfwShowWindow(window);
-
-    // ImGui context + backends
+    // ImGui context, then the renderer, which sets up ImGui's backends.
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = nullptr;  // don't write imgui.ini
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
+    hud->renderer_ = Renderer::create(window, error);
+    if (!hud->renderer_) return nullptr;   // the destructor closes the window
 
-    auto hud = std::unique_ptr<HudWindow>(new HudWindow(window));
-    hud->own_context_ = true;
+    // Black from the first frame: show an empty one before the window appears.
+    hud->renderer_->present_blank();
+    glfwShowWindow(window);
     return hud;
 }
 
 HudWindow::HudWindow(GLFWwindow *window) : window_(window) {}
 
 HudWindow::~HudWindow() {
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    if (own_context_) {
-        ImGui::DestroyContext();
-    }
+    renderer_.reset();   // shuts down ImGui's backends while the window still exists
+    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
     if (window_) {
         glfwDestroyWindow(window_);
         glfwTerminate();
@@ -126,8 +110,8 @@ double HudWindow::frame_period() const {
 }
 
 void HudWindow::begin_frame() {
-    glfwPollEvents();
-    ImGui_ImplOpenGL3_NewFrame();
+    renderer_->begin_frame();   // on Windows: waits here until the display can take the frame
+    glfwPollEvents();           // after the wait, so the frame has the newest input
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
@@ -150,19 +134,14 @@ void HudWindow::end_frame() {
     ImGui::PopStyleVar(2);
 
     ImGui::Render();
-    int fb_w, fb_h;
-    glfwGetFramebufferSize(window_, &fb_w, &fb_h);
-    glViewport(0, 0, fb_w, fb_h);
-    glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    renderer_->render();
 
     // The frame must be read before it is shown: after the swap the back buffer is undefined.
     if (!screenshot_path_.empty()) {
         screenshot_saved_ = save_screenshot(screenshot_path_);
         screenshot_path_.clear();
     }
-    glfwSwapBuffers(window_);
+    renderer_->present();
 }
 
 void HudWindow::request_screenshot(const std::filesystem::path &path) { screenshot_path_ = path; }
@@ -224,18 +203,13 @@ double HudWindow::framebuffer_scale() const {
 }
 
 bool HudWindow::save_screenshot(const std::filesystem::path &path) const {
-    int fb_w, fb_h;
-    glfwGetFramebufferSize(window_, &fb_w, &fb_h);
-    if (fb_w <= 0 || fb_h <= 0) return false;
-
     // RGB is enough: the window is opaque.
-    std::vector<uint8_t> pixels(static_cast<size_t>(fb_w) * fb_h * 3);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, fb_w, fb_h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    int fb_w = 0, fb_h = 0;
+    std::vector<uint8_t> pixels;
+    if (!renderer_->read_pixels(fb_w, fb_h, pixels)) return false;
 
     std::ofstream file(path, std::ios::binary);
     if (!file) return false;
-    stbi_flip_vertically_on_write(1);   // OpenGL reads bottom-up; PNG rows go top-down
     const bool written = stbi_write_png_to_func(append_to_file, &file, fb_w, fb_h, 3, pixels.data(), fb_w * 3) != 0;
     return written && static_cast<bool>(file);
 }

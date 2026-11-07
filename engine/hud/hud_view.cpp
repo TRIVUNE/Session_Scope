@@ -11,7 +11,6 @@
 
 #include <imgui.h>
 
-#include "gl.h"
 
 namespace sessionscope {
 
@@ -286,7 +285,8 @@ constexpr int SPAN = 240;                                                  // co
 
 // ------------------------------------------------------------------------------------ setup
 
-HudView::HudView(double layout_scale, double font_oversample) : scale_(static_cast<float>(layout_scale)) {
+HudView::HudView(TextureStore &textures, double layout_scale, double font_oversample)
+    : scale_(static_cast<float>(layout_scale)), textures_(textures) {
     const float oversample = static_cast<float>(font_oversample);
     mono9_ = load_font(MONO_FONTS, px(9), oversample);
     mono10_ = load_font(MONO_FONTS, px(10), oversample);
@@ -296,18 +296,10 @@ HudView::HudView(double layout_scale, double font_oversample) : scale_(static_ca
     ui15_ = load_font(UI_SEMIBOLD_FONTS, px(15), oversample);
     ui17_ = load_font(UI_FONTS, px(17), oversample);
     ImGui::GetIO().FontDefault = mono11_;
-
-    glGenTextures(1, &texture_);
-    glBindTexture(GL_TEXTURE_2D, texture_);
-    // Smooth stretching gives the soft MiniMeters look for free.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);   // GL_CLAMP_TO_EDGE
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
 }
 
 HudView::~HudView() {
-    if (texture_) glDeleteTextures(1, &texture_);
+    if (texture_) textures_.destroy_texture(texture_);
 }
 
 void HudView::receive(const Snapshot &snapshot) {
@@ -423,9 +415,7 @@ void HudView::rebuild_spectrogram_texture() {
             pixels[p + 3] = 255;
         }
     }
-    glBindTexture(GL_TEXTURE_2D, texture_);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SPAN, SPEC_BINS, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    texture_ = textures_.upload_texture(texture_, SPAN, SPEC_BINS, reinterpret_cast<const std::uint32_t *>(pixels.data()));
     texture_dirty_ = false;
 }
 

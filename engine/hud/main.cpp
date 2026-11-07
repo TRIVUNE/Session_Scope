@@ -160,7 +160,7 @@ static int run_hud(const Options &opt) {
     // them in points, already scaled, so there only the text is rasterised finer.
     const double pixels_per_unit = window->framebuffer_scale();
     const double layout_scale = window->content_scale() / pixels_per_unit;
-    HudView view(layout_scale, pixels_per_unit);   // fonts before the first frame
+    HudView view(window->textures(), layout_scale, pixels_per_unit);   // fonts before the first frame
     view.apply(settings);
 
     // Sizes in the web HUD's CSS pixels, turned into window units. The full layout keeps the
@@ -208,10 +208,11 @@ static int run_hud(const Options &opt) {
         // the mouse (at most 100 ms away), instead of on every display frame.
         if (!view.animating() && !opt.screenshot) {
             window->wait_for_input(std::chrono::duration<double>(next_tick - clock::now()).count());
-        } else if (frame_period > MIN_PACED_PERIOD_S) {
-            // Playing: sleep through most of the frame here. Some graphics drivers otherwise spin a
-            // core inside the buffer swap while they wait for the display (measured: 15 % of a
-            // core without this, 6 % with it).
+        } else if (!window->paces_frames() && frame_period > MIN_PACED_PERIOD_S) {
+            // Playing, on OpenGL: sleep through most of the frame here. Some graphics drivers
+            // otherwise spin a core inside the buffer swap while they wait for the display
+            // (measured: 15 % of a core without this, 6 % with it). On Windows the renderer waits
+            // on the swap chain's frame-latency object instead, which needs no guessing.
             const double until_swap = std::chrono::duration<double>(last_swap - clock::now()).count() + frame_period;
             window->wait_for_input(until_swap - SWAP_MARGIN_S);
         }
