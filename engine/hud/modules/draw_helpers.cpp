@@ -175,9 +175,14 @@ Box Card::draw_card(ImDrawList *draw, const Box &box, float scale, const char *t
     y += value_px * 1.15f;
     for (const CardLine &line : card_lines) {
         if (y + size > box.y + box.h - p * 0.5f) break;   // no room for another line
-        draw->AddText(fonts_.text, size, at(box.x + p, y), colour::TEXT_QUIET, line.label.c_str());
+        // The value, right-aligned; the label on the left, cut off where the value starts, so a
+        // narrow card (dragged small) never shows the two on top of each other.
         const float w = text_width(fonts_.text, size, line.value.c_str());
-        draw->AddText(fonts_.text, size, at(box.x + box.w - p - w, y), line.colour, line.value.c_str());   // right-aligned
+        const float value_x = box.x + box.w - p - w;
+        draw->PushClipRect(at(box.x + 1, y), at(std::max(box.x + 1, value_x - 6 * scale), y + size * 1.5f), true);
+        draw->AddText(fonts_.text, size, at(box.x + p, y), colour::TEXT_QUIET, line.label.c_str());
+        draw->PopClipRect();
+        draw->AddText(fonts_.text, size, at(value_x, y), line.colour, line.value.c_str());
         y += size * 1.5f;
     }
     draw->PopClipRect();

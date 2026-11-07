@@ -13,6 +13,7 @@
 //        every screen refresh: the view draws a frame
 //   4. saves the settings again.
 
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -26,6 +27,11 @@ struct HudOptions {
     std::optional<std::filesystem::path> screenshot;  // --screenshot FILE.png: save one frame and quit
     int wait_ms = 4000;                               // --wait MS: how long before that screenshot
     bool vertical = false;                            // --vertical: modules top to bottom (for screenshots)
+    // --test-drag X1,Y1,X2,Y2: for testing. Halfway to the screenshot, press the left mouse
+    // button at (X1, Y1), move to (X2, Y2) and let go, in window pixels, as if done by hand. Fed
+    // straight into Dear ImGui, so it tests our dragging and resizing code without depending on
+    // how a test script's mouse is scaled by Windows.
+    std::optional<std::array<float, 4>> test_drag;
 };
 
 // Runs the HUD; returns the program's exit code (0 = fine).

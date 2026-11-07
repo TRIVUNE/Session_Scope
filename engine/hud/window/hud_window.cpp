@@ -141,10 +141,11 @@ void HudWindow::set_opacity(int percent) {
     glfwSetWindowOpacity(window_, static_cast<float>(std::clamp(percent, 25, 100)) / 100.0f);
 }
 
-void HudWindow::begin_frame() {
+void HudWindow::begin_frame(const std::function<void()> &before_new_frame) {
     renderer_->begin_frame();   // on Windows: sleeps here until the screen can take a new frame
     glfwPollEvents();           // after the wait, so this frame sees the newest mouse movement
     ImGui_ImplGlfw_NewFrame();  // tell ImGui where the mouse is, the window size, ...
+    if (before_new_frame) before_new_frame();
     ImGui::NewFrame();
 
     // ImGui draws inside "ImGui windows". We make one that covers our whole real window, with no

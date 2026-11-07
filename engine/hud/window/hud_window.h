@@ -16,6 +16,7 @@
 // Screenshots are written as PNG files by stb_image_write (third-party, public domain).
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -77,7 +78,9 @@ public:
     TextureStore &textures() { return *renderer_; }
 
     // One frame: begin_frame(), then draw with Dear ImGui, then end_frame().
-    void begin_frame();
+    // `before_new_frame`, if given, runs after GLFW's mouse and keyboard reach Dear ImGui and just
+    // before ImGui starts the frame: the last moment input can be added (used by --test-drag).
+    void begin_frame(const std::function<void()> &before_new_frame = {});
     void end_frame();
 
     // The window's position and size, and moving or resizing it.

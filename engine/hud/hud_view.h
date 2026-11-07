@@ -60,6 +60,12 @@ private:
     std::vector<Module *> shown() const;    // the modules shown, in the person's order
     void lay_out(const std::vector<Module *> &modules, ImVec2 window_size);   // fills boxes_
     void drag_modules(ImDrawList *draw);    // picks up, follows and drops a dragged module
+    void resize_modules(ImDrawList *draw, const std::vector<Module *> &modules);   // the handles between modules
+    // The sizes the person set for the current direction (across or down).
+    std::vector<ModuleSize> &sizes() { return vertical_ ? sizes_down_ : sizes_across_; }
+    std::optional<int> size_of(const std::string &id) const;   // in design pixels, if set
+    void set_size(const std::string &id, float window_pixels);
+    void clear_size(const std::string &id);
     ViewRequests menu();                    // the right-click menu
     float px(float design_pixels) const { return design_pixels * scale_; }
 
@@ -68,7 +74,16 @@ private:
     std::vector<std::unique_ptr<Module>> modules_;   // every module there is, in the default order
     std::vector<std::string> shown_ids_;             // the ids of the modules shown, in order
     std::vector<Box> boxes_;                         // where each shown module is drawn this frame
+    std::vector<bool> flexible_;                     // per box: true if it shares the free space
     std::optional<std::size_t> dragging_;            // which shown module is being dragged, if any
+    // A resize in progress: the handle after box `handle`, and both boxes' lengths when it began.
+    struct Resize {
+        std::size_t handle;
+        float start_mouse, start_before, start_after;
+    };
+    std::optional<Resize> resizing_;
+    std::vector<ModuleSize> sizes_across_;           // lengths the person set, horizontal layout
+    std::vector<ModuleSize> sizes_down_;             // ... vertical layout
     bool vertical_ = false;
     bool on_top_ = true;
     int fps_ = 0;          // frame-rate limit, 0 = the screen's rate

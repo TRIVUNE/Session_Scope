@@ -17,6 +17,8 @@
 #include "system_monitor.h"    // readings from this computer
 #include "window/hud_window.h"
 
+#include <imgui.h>   // only for --test-drag
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -64,6 +66,25 @@ std::unique_ptr<HudEngine> make_engine(const HudOptions &options) {
 double demo_daw_cpu(const Snapshot &snapshot, double now) {
     const double late = snapshot.late.p99 ? std::clamp(*snapshot.late.p99, 0.0, 1.0) : 0.0;
     return std::clamp(0.07 + 0.03 * std::sin(now * 0.9) + 0.6 * late, 0.0, 1.0);
+}
+
+// --test-drag (testing only): plays a left-button drag into Dear ImGui, one step per frame, as if
+// the mouse did it. ImGui handles at most one button change per frame, so the steps are spread out:
+//   step 0      the mouse arrives at the start point
+//   step 1      the button goes down
+//   steps 2-21  the mouse moves to the end point in 20 even steps
+//   step 22     the button comes up
+void play_test_drag(const std::array<float, 4> &drag, bool started, int &step) {
+    if (!started || step > 22) return;
+    ImGuiIO &io = ImGui::GetIO();
+    const float x1 = drag[0], y1 = drag[1], x2 = drag[2], y2 = drag[3];
+    // Every step first states where the mouse is: the real cursor may also be over the window, and
+    // its position can arrive in the same frame; ours, added last, is the one that counts.
+    const float t = std::clamp(static_cast<float>(step - 1) / 20.0f, 0.0f, 1.0f);
+    io.AddMousePosEvent(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
+    if (step == 1) io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    if (step == 22) io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    ++step;
 }
 
 }  // namespace
@@ -150,6 +171,9 @@ int run_hud(const HudOptions &options) {
     constexpr double WAKE_EARLY_S = 0.004;
     constexpr double SHORTEST_SLEEPABLE_FRAME_S = 0.007;   // above ~140 Hz a frame is too short to sleep in
     auto last_present = clock::now();
+    // --test-drag starts halfway to the screenshot, so the screenshot shows the result.
+    const auto drag_time = clock::now() + std::chrono::milliseconds(options.wait_ms / 2);
+    int drag_step = 0;
 
     while (!window->should_close()) {
         // (a) Pacing on OpenGL: sleep until just before the next screen refresh.
@@ -183,7 +207,9 @@ int run_hud(const HudOptions &options) {
         }
 
         // (d) One frame.
-        window->begin_frame();   // on Windows: sleeps here until the screen can take the frame
+        window->begin_frame([&] {   // on Windows: sleeps here until the screen can take the frame
+            if (options.test_drag) play_test_drag(*options.test_drag, now >= drag_time, drag_step);
+        });
         const ViewRequests requests = view.draw(system, snapshot, seconds(clock::now()));
         if (requests.keep_on_top) window->set_on_top(*requests.keep_on_top);
         if (requests.vertical) turn_window(*requests.vertical);
