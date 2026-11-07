@@ -1,14 +1,14 @@
 // SessionScope HUD native entry point.
 // Builds build/engine/SessionScopeHUD.exe
 // Options: --replay TRACE | --demo [--vertical] [--screenshot OUT.png] [--wait MS]
-// Draws the HUD (hud_view.h) from engine snapshots and the machine's CPU readings (cpu_monitor.h).
+// Draws the HUD (hud_view.h) from engine snapshots and the machine's readings (system_monitor.h).
 
 #include "hud_window.h"
 #include "hud_engine.h"
 #include "hud_settings.h"
 #include "hud_view.h"
 #include "simulate.h"
-#include "cpu_monitor.h"
+#include "system_monitor.h"
 
 #include <algorithm>
 #include <chrono>
@@ -103,8 +103,8 @@ static void show_error(const std::string &msg) {
 struct StripSize {
     int width, height, min_width, min_height;
 };
-constexpr StripSize ACROSS = {960, 150, 300, 70};
-constexpr StripSize DOWN = {280, 640, 120, 240};
+constexpr StripSize ACROSS = {1400, 150, 300, 70};
+constexpr StripSize DOWN = {280, 1100, 120, 240};
 
 // The demo has no DAW: its stand-in CPU follows the simulated song's lateness, so the meter
 // peaks where the song chokes. Labelled as generated, like the rest of the demo.
@@ -179,7 +179,7 @@ static int run_hud(const Options &opt) {
     constexpr double MIN_PACED_PERIOD_S = 0.007; // above about 140 Hz a frame is too short to sleep in
     auto last_swap = clock::now();
 
-    CpuMonitor cpu;
+    SystemMonitor system;
     Snapshot snapshot;
     const bool live = opt.replay_path.empty() && !opt.demo;
 
@@ -202,13 +202,13 @@ static int run_hud(const Options &opt) {
             const double host = live ? engine->source().host_process_id() : 0;
             const std::optional<double> stand_in =
                 opt.demo ? std::optional<double>(demo_daw_cpu(snapshot, seconds(now))) : std::nullopt;
-            cpu.tick(seconds(now), host, bar, stand_in);
+            system.tick(seconds(now), host, bar, stand_in);
             next_tick += tick_interval;
             if (next_tick < now) next_tick = now;   // fell behind: catch up rather than burst
         }
 
         window->begin_frame();   // on Windows: waits here until the display can take the frame
-        const ViewRequests requests = view.draw(cpu, snapshot, seconds(clock::now()));
+        const ViewRequests requests = view.draw(system, snapshot, seconds(clock::now()));
         if (requests.keep_on_top) window->set_on_top(*requests.keep_on_top);
         if (requests.vertical) turn_window(*requests.vertical);
 

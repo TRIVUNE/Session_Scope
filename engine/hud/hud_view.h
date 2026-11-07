@@ -2,8 +2,9 @@
 #define SESSIONSCOPE_HUD_VIEW_H
 
 // Draws the HUD: the chosen modules (modules.h) side by side, left to right, or stacked top to
-// bottom. Right-click anywhere for the menu: which modules to show, which direction they run,
-// and whether the window stays on top. The choices are saved in hud.ini.
+// bottom. Drag a module to move it among the others. Right-click anywhere for the menu: which
+// modules to show, which direction they run, keep on top, and back to the default layout. The
+// choices are saved in hud.ini.
 //
 // Sizes are written in CSS pixels and multiplied by the display scale.
 
@@ -30,18 +31,20 @@ public:
     // the first frame.
     HudView(TextureStore &textures, double layout_scale, double font_oversample);
 
-    // The choices the view owns (modules shown, direction, on top): taken from the saved settings
-    // at start, written back into them at the end.
+    // The choices the view owns (modules shown and their order, direction, on top): taken from the
+    // saved settings at start, written back into them at the end.
     void apply(const HudSettings &settings);
     void remember(HudSettings &settings) const;
     bool vertical() const { return vertical_; }
 
     // Draws one display frame.
-    ViewRequests draw(const CpuMonitor &cpu, const Snapshot &snapshot, double now);
+    ViewRequests draw(const SystemMonitor &system, const Snapshot &snapshot, double now);
 
 private:
     // The modules shown, in order.
     std::vector<Module *> shown() const;
+    // Picks up, follows and drops a module dragged with the left mouse button.
+    void drag_modules(ImDrawList *draw);
     ViewRequests menu();
     float px(float css_pixels) const { return css_pixels * scale_; }
 
@@ -49,6 +52,8 @@ private:
     Fonts fonts_;
     std::vector<std::unique_ptr<Module>> modules_;   // every module, in the default order
     std::vector<std::string> shown_ids_;
+    std::vector<Box> boxes_;                         // where each shown module was drawn this frame
+    std::optional<std::size_t> dragging_;            // the shown module being moved
     bool vertical_ = false;
     bool on_top_ = true;
 };

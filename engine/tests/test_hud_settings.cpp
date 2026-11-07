@@ -18,7 +18,7 @@ int main() {
         const HudSettings s = load_hud_settings(file);
         CHECK(!s.window);
         CHECK(s.on_top && !s.vertical);
-        CHECK((s.modules == std::vector<std::string>{"meter", "cpu", "cores", "bars"}));
+        CHECK((s.modules == std::vector<std::string>{"meter", "cpu", "cores", "busiest", "dropouts", "memory", "clock"}));
     }
 
     // What is saved comes back.

@@ -1,7 +1,8 @@
-// Tests for CoreCpu (per-core load of this machine) and CpuMonitor (the HUD strip's history).
+// Tests for CoreCpu (per-core load of this machine), SystemMonitor (the HUD's readings), the
+// DAW process's memory and disk, and the machine's memory.
 
 #include "core_cpu.h"
-#include "cpu_monitor.h"
+#include "system_monitor.h"
 #include "sensor_ring.h"   // process_id()
 #include "test_support.h"
 
@@ -38,9 +39,9 @@ int main() {
         CHECK(busiest > 0.5);   // the burning core was busy for most of the time
     }
 
-    // CpuMonitor follows a process by id: this test's own, which is busy.
+    // SystemMonitor follows a process by id: this test's own, which is busy.
     {
-        CpuMonitor monitor(1.0);
+        SystemMonitor monitor(1.0);
         monitor.tick(0.0, process_id(), std::nullopt);
         CHECK(monitor.samples().size() == 1);
         CHECK(!monitor.samples().back().daw);          // no baseline yet
@@ -55,7 +56,7 @@ int main() {
 
     // A stand-in value replaces the DAW's CPU (the demo); readings older than the span go.
     {
-        CpuMonitor monitor(1.0);
+        SystemMonitor monitor(1.0);
         for (int i = 0; i <= 30; ++i) monitor.tick(i * 0.1, 0, i / 10, 0.25);
         CHECK(monitor.samples().front().t >= 2.0 - 1e-9);
         CHECK(monitor.samples().size() == 11);
@@ -65,10 +66,47 @@ int main() {
 
     // No DAW known: no DAW value.
     {
-        CpuMonitor monitor;
+        SystemMonitor monitor;
         monitor.tick(0.0, 0, std::nullopt);
         monitor.tick(0.1, 0, std::nullopt);
         CHECK(!monitor.samples().back().daw);
+        CHECK(!monitor.samples().back().daw_memory_bytes);
+    }
+
+    // The machine's memory: some total, and less than that available.
+    {
+        const SystemMemory memory = system_memory();
+        CHECK(memory.total_bytes && *memory.total_bytes > 0);
+        CHECK(memory.available_bytes && *memory.available_bytes <= *memory.total_bytes);
+    }
+
+    // A process's memory and reads: this test's own. The read rate may be zero: the
+    // test reads nothing between the two samples.
+    {
+        ProcessResources resources;
+        CHECK(resources.follow(process_id()));
+        const ProcessResources::Reading first = resources.sample(0.0);
+        CHECK(first.memory_bytes && *first.memory_bytes > 0);
+        CHECK(!first.read_bytes_per_s);   // no baseline yet
+        const ProcessResources::Reading second = resources.sample(0.5);
+        CHECK(second.read_bytes_per_s && *second.read_bytes_per_s >= 0);
+        CHECK(!resources.follow(0));
+        CHECK(!resources.sample(1.0).memory_bytes);
+    }
+
+    // The CPU clock: on Windows a speed and a rated speed once two samples are taken.
+    {
+        CpuClock clock;
+        clock.sample();
+        burn(200);
+        const CpuClock::Reading reading = clock.sample();
+#ifdef _WIN32
+        CHECK(reading.rated_mhz && *reading.rated_mhz > 100);
+        CHECK(reading.mhz && *reading.mhz > 100);
+        CHECK(reading.limit && *reading.limit > 0);
+#else
+        CHECK(!reading.mhz);
+#endif
     }
 
     return finish_tests();

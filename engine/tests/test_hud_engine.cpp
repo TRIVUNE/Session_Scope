@@ -31,6 +31,38 @@ HudEngine make_engine(const std::filesystem::path &folder) {
     return HudEngine(std::move(sensor), std::move(host), "test");
 }
 
+// The staircase climbs until its blocks overrun: they are counted, each once, and the most recent
+// are listed with how late they were and where.
+void test_overruns_are_counted_once() {
+    auto tmp = std::filesystem::temp_directory_path() / "sessionscope_test_hud_overruns";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    auto folder = write_simulated_trace(tmp / "staircase", "staircase");
+
+    HudEngine e = make_engine(folder);
+    e.tick();
+    const Snapshot s = e.snapshot(0.0);
+    const double overrun_tier = metric_by_key("lateness").tiers[2];
+    CHECK(s.overruns > 0);
+    CHECK(!s.recent_overruns.empty());
+    CHECK(s.recent_overruns.size() <= RECENT_OVERRUNS);
+    CHECK(s.recent_overruns.size() <= s.overruns);
+    for (const Overrun &o : s.recent_overruns) {
+        CHECK(o.late >= overrun_tier);
+        CHECK(o.ago_s >= 0);
+        CHECK(o.bar.has_value());
+    }
+    for (std::size_t i = 1; i < s.recent_overruns.size(); ++i) {
+        CHECK(s.recent_overruns[i].ago_s <= s.recent_overruns[i - 1].ago_s);   // newest last
+    }
+
+    // No new blocks: the count stays.
+    e.tick();
+    CHECK(e.snapshot(0.0).overruns == s.overruns);
+
+    std::filesystem::remove_all(tmp);
+}
+
 void test_snapshot_has_everything_the_page_draws() {
     auto tmp = std::filesystem::temp_directory_path() / "sessionscope_test_hud_staircase";
     std::filesystem::remove_all(tmp);
@@ -387,6 +419,7 @@ int main() {
     sessionscope::test_snapshot_metric_structure();
     sessionscope::test_lost_count_includes_sensor_dropped();
     sessionscope::test_dropping_old_rows_changes_nothing_shown();
+    sessionscope::test_overruns_are_counted_once();
 
     return finish_tests();
 }

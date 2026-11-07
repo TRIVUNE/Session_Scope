@@ -236,6 +236,15 @@ struct BarRow {
     std::map<int, BarCell> cells;      // bar -> cell
 };
 
+// A block that ran at least the "overrun" tier late (lateness metric, tiers[2]): close enough to
+// its deadline that the audio may have dropped out.
+struct Overrun {
+    double ago_s;               // seconds before the newest block
+    std::optional<int> bar;     // the bar it fell in, if the host was playing
+    double late;                // how late, as a share of the block
+};
+constexpr std::size_t RECENT_OVERRUNS = 8;   // how many the snapshot lists
+
 struct PassWorst {
     std::optional<double> value;
     std::optional<int> bar;
@@ -277,6 +286,10 @@ struct Snapshot {
     double spec_col_s = SPEC_COL_S;
     std::vector<BarRow> bars;
     PassWorst pass_worst;
+
+    // Overruns since the HUD started, and the most recent ones, newest last.
+    std::size_t overruns = 0;
+    std::vector<Overrun> recent_overruns;
 
     // The bar clicked in the list (select_bar), pass by pass; empty when none is selected.
     std::optional<int> selected_bar;
@@ -346,6 +359,14 @@ private:
     double history_s_ = HISTORY_S;           // seconds of sensor rows kept
     double bars_at_ = 0.0;
     std::size_t spec_from_ = 0;              // first sensor row not yet put in a spectrogram column
+    std::size_t overrun_from_ = 0;           // first sensor row not yet checked for an overrun
+    std::size_t overruns_ = 0;
+    struct OverrunAt {
+        double t;
+        std::optional<int> bar;
+        double late;
+    };
+    std::deque<OverrunAt> recent_overruns_;
     std::map<int, std::vector<int>> spec_open_;  // column id -> bin counts
     std::vector<std::optional<double>> meter_buf_;   // reused between calls
     std::vector<std::optional<double>> cpu_meter_buf_;

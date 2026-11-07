@@ -14,12 +14,12 @@ constexpr ImU32 BACKGROUND = IM_COL32(0xf2, 0xf2, 0xf2, 0xff);   // behind the m
 constexpr ImU32 PANEL = IM_COL32(0xff, 0xff, 0xff, 0xff);        // inside a module's frame
 constexpr ImU32 BORDER = IM_COL32(0x3c, 0x3c, 0x3c, 0xff);       // a module's frame: one pixel
 constexpr ImU32 TEXT = IM_COL32(0x3a, 0x3a, 0x3a, 0xff);
-constexpr ImU32 TEXT_QUIET = IM_COL32(0x8c, 0x8c, 0x8c, 0xff);   // column titles, empty values
-constexpr ImU32 FILL = IM_COL32(0xc6, 0xc6, 0xc6, 0xff);         // the meter's level
+constexpr ImU32 TEXT_QUIET = IM_COL32(0x8c, 0x8c, 0x8c, 0xff);   // titles, labels, empty values
+constexpr ImU32 WARN = IM_COL32(0xc8, 0x28, 0x1e, 0xff);         // a value that means trouble
+constexpr ImU32 FILL = IM_COL32(0xc6, 0xc6, 0xc6, 0xff);         // a meter's level
 constexpr ImU32 MARK = IM_COL32(0x00, 0x00, 0x00, 0xff);         // peak mark, bar lines
-constexpr ImU32 ROW_NOW = IM_COL32(0xe6, 0xe6, 0xe6, 0xff);      // the bar playing now
-constexpr ImU32 AT_RISK = IM_COL32(0xf8, 0xdc, 0x8c, 0xff);      // a bar list cell past "at risk"
-constexpr ImU32 OVERRUN = IM_COL32(0xf3, 0xa0, 0x98, 0xff);      // ... past "overrun"
+constexpr ImU32 HOVER = IM_COL32(0xe6, 0xe6, 0xe6, 0xff);        // a menu item under the mouse
+constexpr ImU32 DRAG = IM_COL32(0x1e, 0x64, 0xc8, 0xff);         // a module being moved, where it lands
 }  // namespace colour
 
 // The same background, for clearing the swap chain before ImGui draws.

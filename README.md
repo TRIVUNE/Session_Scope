@@ -24,6 +24,7 @@ they appear. Why the code looks the way it does: [decision 0005](docs/decisions/
 | `tools/` | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners |
 | `docs/` | decisions, research records per spike, metric definitions |
 | `design/hud-prototype/` | the HUD interaction prototype (illustrative data only) |
+| `handoff/` | for the next AI agent: the HUD's direction, what's next, how to work here |
 
 ## Quick start: sensor + HUD window
 
@@ -45,12 +46,15 @@ The HUD is one long strip of modules, as in MiniMeters:
 | --- | --- |
 | Peak meter | the DAW process's CPU, with a peak mark held for two seconds |
 | CPU number | the DAW's share of the whole machine, averaged over the last second |
-| Core heatmap | every core of the machine (dark blue idle, through cyan, green and yellow, to red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline |
-| Bars list | every bar of the song and how late its blocks ran (late p99, worst pass); click a column title to sort |
+| Core heatmap | every core of the machine, numbered on the left (dark blue idle, through cyan, green and yellow, to red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline; hover for a core's exact load |
+| Busiest core | the single most loaded core and which one it is: a pinned audio thread crackles long before the overall CPU looks high |
+| Dropouts | blocks that ran late enough to drop out (count, and the bar of the last one), and the headroom left |
+| Memory and disk | the DAW's RAM, the machine's free RAM, and how fast the DAW reads (sample streaming) |
+| CPU clock | the CPU's speed against its rated speed, and whether the system caps it (heat, battery, power plan) |
 
-Right-click anywhere to choose the modules shown, run them across or down, and keep the window
-on top. The DAW's CPU needs the sensor playing (it tells the HUD which process is the DAW); the
-core heatmap works without it.
+Drag a module to move it. Right-click anywhere to choose the modules shown, run them across or
+down, keep the window on top, or reset the layout. The DAW's readings need the sensor playing
+(it tells the HUD which process is the DAW); the core, memory and clock modules work without it.
 
 `--demo` shows the HUD on generated data, without a DAW (its CPU number is a stand-in); `--replay
 <trace folder>` replays a recording.

@@ -260,6 +260,19 @@ void HudEngine::count_new_blocks() {
                     metric_values(blocks_, metric_by_key("lateness"), late_cells_.done()));
     host_cells_.add(host_bars_.pass_id(), host_bars_.bar(),
                     host_on_bars_metric_values(host_bars_, metric_by_key("host_rt"), host_cells_.done()));
+
+    // Overruns: each block checked once, as it arrives.
+    const double overrun = metric_by_key("lateness").tiers[2];
+    const auto &t = src_->sensor()["t"];
+    const std::size_t n = std::min(t.size(), blocks_.size());
+    for (; overrun_from_ < n; ++overrun_from_) {
+        const std::optional<double> v = late(overrun_from_);
+        if (!v || *v < overrun) continue;
+        ++overruns_;
+        const int bar = blocks_.bar()[overrun_from_];
+        recent_overruns_.push_back({t[overrun_from_], bar ? std::optional<int>(bar) : std::nullopt, *v});
+        if (recent_overruns_.size() > RECENT_OVERRUNS) recent_overruns_.pop_front();
+    }
 }
 
 void HudEngine::forget_old_rows() {
@@ -273,6 +286,7 @@ void HudEngine::forget_old_rows() {
         blocks_.drop_front(rows);
         late_cells_.forget_rows(rows);
         spec_from_ = spec_from_ > rows ? spec_from_ - rows : 0;
+        overrun_from_ = overrun_from_ > rows ? overrun_from_ - rows : 0;
     }
     // Host blocks: once counted, only a short tail is kept.
     if (host_bars_.size() > 2 * HOST_ROWS_KEPT) {
@@ -483,6 +497,8 @@ Snapshot HudEngine::snapshot(double now) {
     out.late.tier = std::isnan(late_p99) ? std::nullopt : std::optional<int>(tier(metric_by_key("lateness"), late_p99));
 
     out.meter = meter(i);
+    out.overruns = overruns_;
+    for (const OverrunAt &o : recent_overruns_) out.recent_overruns.push_back({t[i] - o.t, o.bar, o.late});
     auto spec_cols = spec_columns(n);
     out.spec_cols = std::move(spec_cols);
     out.spec_bins = SPEC_BINS;

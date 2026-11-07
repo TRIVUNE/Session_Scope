@@ -24,8 +24,9 @@ struct WindowPlace {
 struct HudSettings {
     std::optional<WindowPlace> window;
     bool on_top = true;
-    // The modules shown, in order, by id (see engine/hud/modules.h). Unknown ids are ignored.
-    std::vector<std::string> modules = {"meter", "cpu", "cores", "bars"};
+    // The modules shown, in the order the person dragged them into, by id (engine/hud/modules.h).
+    // Unknown ids are ignored.
+    std::vector<std::string> modules = {"meter", "cpu", "cores", "busiest", "dropouts", "memory", "clock"};
     bool vertical = false;   // modules stacked top to bottom instead of left to right
 };
 

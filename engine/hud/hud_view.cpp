@@ -20,7 +20,10 @@ ImFont *load_font(const EmbeddedFont &font, float size) {
     config.FontDataOwnedByAtlas = false;
     config.OversampleH = 2;
     config.OversampleV = 1;
-    return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), font.size, size, &config);
+    // Latin, plus dashes and quotes (U+2010..U+2027) and the menu's triangles.
+    static const ImWchar ranges[] = {0x0020, 0x00FF, 0x2010, 0x2027, 0x25B2, 0x25BE, 0};
+    return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(font.data), font.size, size, &config,
+                                                      ranges);
 }
 
 // ImGui's own widgets (the menu, the list's scroll bar) in the HUD's light look.
@@ -37,7 +40,7 @@ void light_style(float scale, ImFont *text) {
     style.Colors[ImGuiCol_Border] = ImColor(colour::BORDER);
     style.Colors[ImGuiCol_Text] = ImColor(colour::TEXT);
     style.Colors[ImGuiCol_TextDisabled] = ImColor(colour::TEXT_QUIET);
-    style.Colors[ImGuiCol_HeaderHovered] = ImColor(colour::ROW_NOW);
+    style.Colors[ImGuiCol_HeaderHovered] = ImColor(colour::HOVER);
     style.Colors[ImGuiCol_Separator] = ImColor(colour::FILL);
     style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
     style.Colors[ImGuiCol_ScrollbarGrab] = ImColor(colour::FILL);
@@ -83,7 +86,7 @@ std::vector<Module *> HudView::shown() const {
     return out;
 }
 
-ViewRequests HudView::draw(const CpuMonitor &cpu, const Snapshot &snapshot, double now) {
+ViewRequests HudView::draw(const SystemMonitor &system, const Snapshot &snapshot, double now) {
     ImDrawList *draw = ImGui::GetWindowDrawList();
     const ImVec2 size = ImGui::GetIO().DisplaySize;
     draw->AddRectFilled(ImVec2(0, 0), size, colour::BACKGROUND);
@@ -102,14 +105,16 @@ ViewRequests HudView::draw(const CpuMonitor &cpu, const Snapshot &snapshot, doub
     }
     const float flexible = std::max(0.0f, length - fixed);
 
-    const HudFrame frame{cpu, snapshot, now, scale_};
+    const HudFrame frame{system, snapshot, now, scale_};
     float along = pad;
+    boxes_.clear();
     for (Module *module : modules) {
         float l = module->fixed_length(vertical_, thickness, scale_);
         if (l <= 0) l = weights > 0 ? flexible * module->weight() / weights : 0;
         const float start = std::round(along), end = std::round(along + l);
         const Box box = vertical_ ? Box{std::round(pad), start, std::round(thickness), end - start}
                                   : Box{start, std::round(pad), end - start, std::round(thickness)};
+        boxes_.push_back(box);
         if (box.w >= 1 && box.h >= 1) module->draw(draw, box, frame);
         along += l + gap;
     }
@@ -119,7 +124,62 @@ ViewRequests HudView::draw(const CpuMonitor &cpu, const Snapshot &snapshot, doub
                       ImVec2((size.x - text_width(fonts_.text, fonts_.text_size, hint)) * 0.5f, (size.y - fonts_.text_size) * 0.5f),
                       colour::TEXT_QUIET, hint);
     }
+    drag_modules(draw);
     return menu();
+}
+
+// Press on a module and move the mouse: it lifts (blue frame), a blue line shows where it will
+// land between the others, and letting go puts it there.
+void HudView::drag_modules(ImDrawList *draw) {
+    const ImGuiIO &io = ImGui::GetIO();
+    const auto hit = [&](ImVec2 p) -> std::optional<std::size_t> {
+        for (std::size_t i = 0; i < boxes_.size(); ++i) {
+            const Box &b = boxes_[i];
+            if (p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h) return i;
+        }
+        return std::nullopt;
+    };
+    if (!dragging_ && ImGui::IsMouseDragging(ImGuiMouseButton_Left, px(6)) && !ImGui::IsAnyItemActive() &&
+        !ImGui::IsPopupOpen("##hud_menu")) {
+        dragging_ = hit(io.MouseClickedPos[ImGuiMouseButton_Left]);
+    }
+    if (!dragging_ || *dragging_ >= boxes_.size()) {
+        dragging_.reset();
+        return;
+    }
+
+    // Where it would land: before the first module whose middle is past the mouse.
+    const float mouse = vertical_ ? io.MousePos.y : io.MousePos.x;
+    std::size_t slot = boxes_.size();
+    for (std::size_t i = 0; i < boxes_.size(); ++i) {
+        const Box &b = boxes_[i];
+        if (mouse < (vertical_ ? b.y + b.h * 0.5f : b.x + b.w * 0.5f)) {
+            slot = i;
+            break;
+        }
+    }
+
+    const Box &lifted = boxes_[*dragging_];
+    draw->AddRect(ImVec2(lifted.x - 1, lifted.y - 1), ImVec2(lifted.x + lifted.w + 1, lifted.y + lifted.h + 1), colour::DRAG, 0,
+                  0, px(2));
+    const float half_gap = px(4);
+    float line;
+    if (slot < boxes_.size()) line = (vertical_ ? boxes_[slot].y : boxes_[slot].x) - half_gap;
+    else line = vertical_ ? boxes_.back().y + boxes_.back().h + half_gap : boxes_.back().x + boxes_.back().w + half_gap;
+    const ImVec2 size = io.DisplaySize;
+    if (vertical_) draw->AddRectFilled(ImVec2(px(8), line - px(1.5f)), ImVec2(size.x - px(8), line + px(1.5f)), colour::DRAG);
+    else draw->AddRectFilled(ImVec2(line - px(1.5f), px(8)), ImVec2(line + px(1.5f), size.y - px(8)), colour::DRAG);
+    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        const std::size_t from = *dragging_;
+        std::size_t to = slot > from ? slot - 1 : slot;
+        const std::string id = shown_ids_[from];
+        shown_ids_.erase(shown_ids_.begin() + static_cast<std::ptrdiff_t>(from));
+        to = std::min(to, shown_ids_.size());
+        shown_ids_.insert(shown_ids_.begin() + static_cast<std::ptrdiff_t>(to), id);
+        dragging_.reset();
+    }
 }
 
 // Right-click anywhere: tick the modules to show, pick the direction, keep the window on top.
@@ -135,19 +195,8 @@ ViewRequests HudView::menu() {
         const auto found = std::find(shown_ids_.begin(), shown_ids_.end(), module->id());
         bool on = found != shown_ids_.end();
         if (ImGui::MenuItem(module->title(), nullptr, &on)) {
-            if (!on) {
-                shown_ids_.erase(found);
-            } else {
-                // Back in its usual place among the modules shown.
-                std::vector<std::string> ordered;
-                for (const auto &m : modules_) {
-                    const std::string id = m->id();
-                    if (id == module->id() || std::find(shown_ids_.begin(), shown_ids_.end(), id) != shown_ids_.end()) {
-                        ordered.push_back(id);
-                    }
-                }
-                shown_ids_ = ordered;
-            }
+            if (!on) shown_ids_.erase(found);
+            else shown_ids_.push_back(module->id());   // at the end; drag it where it should go
         }
     }
     ImGui::Separator();
@@ -155,6 +204,7 @@ ViewRequests HudView::menu() {
     if (ImGui::MenuItem("Vertical", nullptr, vertical_) && !vertical_) requests.vertical = vertical_ = true;
     ImGui::Separator();
     if (ImGui::MenuItem("Keep on top", nullptr, on_top_)) requests.keep_on_top = on_top_ = !on_top_;
+    if (ImGui::MenuItem("Reset layout")) shown_ids_ = HudSettings{}.modules;
     ImGui::EndPopup();
     return requests;
 }
