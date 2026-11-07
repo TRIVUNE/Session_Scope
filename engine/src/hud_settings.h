@@ -1,7 +1,8 @@
 #ifndef SESSIONSCOPE_HUD_SETTINGS_H
 #define SESSIONSCOPE_HUD_SETTINGS_H
 
-// What the HUD remembers between runs: where its window was, how big, and how it was set up.
+// What the HUD remembers between runs: where its window was, how big, which modules it shows
+// and whether they run across or down.
 // Stored as plain "key=value" lines in hud.ini in the per-user SessionScope folder
 // (settings_folder() in trace_folders.h), so a person can read and edit it.
 //
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace sessionscope {
 
@@ -20,12 +22,11 @@ struct WindowPlace {
 };
 
 struct HudSettings {
-    std::optional<WindowPlace> full;      // the window in its normal layout
-    std::optional<WindowPlace> compact;   // the window in compact (meter-only) mode
-    bool compact_mode = false;
+    std::optional<WindowPlace> window;
     bool on_top = true;
-    bool list_open = true;
-    std::string sort_key = "bar";
+    // The modules shown, in order, by id (see engine/hud/modules.h). Unknown ids are ignored.
+    std::vector<std::string> modules = {"meter", "cpu", "cores", "bars"};
+    bool vertical = false;   // modules stacked top to bottom instead of left to right
 };
 
 // <settings folder>/hud.ini, or empty if there is no settings folder.

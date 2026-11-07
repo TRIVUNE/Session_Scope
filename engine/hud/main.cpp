@@ -1,14 +1,16 @@
 // SessionScope HUD native entry point.
 // Builds build/engine/SessionScopeHUD.exe
-// Options: --replay TRACE | --demo [--screenshot OUT.png] [--wait MS]
-// Draws the HUD (hud_view.h) from engine snapshots.
+// Options: --replay TRACE | --demo [--vertical] [--screenshot OUT.png] [--wait MS]
+// Draws the HUD (hud_view.h) from engine snapshots and the machine's CPU readings (cpu_monitor.h).
 
 #include "hud_window.h"
 #include "hud_engine.h"
 #include "hud_settings.h"
 #include "hud_view.h"
 #include "simulate.h"
+#include "cpu_monitor.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -34,6 +36,7 @@ struct Options {
     bool demo = false;
     std::optional<std::filesystem::path> screenshot;
     int wait_ms = 4000;
+    bool vertical = false;   // modules stacked top to bottom (for screenshots; normally from hud.ini)
 };
 
 static void show_error(const std::string &msg);
@@ -50,10 +53,12 @@ static Options parse_args(int argc, char **argv) {
             opt.screenshot = argv[++i];
         } else if (arg == "--wait" && i + 1 < argc) {
             opt.wait_ms = std::atoi(argv[++i]);
+        } else if (arg == "--vertical") {
+            opt.vertical = true;
         } else {
             // A windowed program has no console, so say it where it can be seen.
             show_error("Unknown or incomplete argument: " + arg +
-                       "\n\nUsage: SessionScopeHUD [--replay TRACE] [--demo] [--screenshot OUT.png] [--wait MS]");
+                       "\n\nUsage: SessionScopeHUD [--replay TRACE] [--demo] [--vertical] [--screenshot OUT.png] [--wait MS]");
             std::exit(2);
         }
     }
@@ -93,48 +98,24 @@ static void show_error(const std::string &msg) {
 #endif
 }
 
-// Whether the sensor plug-in is in a standard VST3 or CLAP folder, for the waiting checklist.
-static bool sensor_installed() {
-#ifdef _WIN32
-    namespace fs = std::filesystem;
-    // <folder named by the environment variable>/<below>, or empty if the variable is not set.
-    const auto file_in = [](const char *variable, const fs::path &below) -> fs::path {
-        char base[MAX_PATH] = {};
-        if (!GetEnvironmentVariableA(variable, base, MAX_PATH)) return {};
-        return fs::path(base) / below;
-    };
-    const fs::path vst3_file = fs::path("SessionScope.vst3") / "Contents" / "x86_64-win" / "SessionScope.vst3";
-    const fs::path candidates[] = {
-        file_in("LOCALAPPDATA", fs::path("Programs/Common/VST3") / vst3_file),
-        file_in("CommonProgramFiles", fs::path("VST3") / vst3_file),
-        file_in("LOCALAPPDATA", "Programs/Common/CLAP/SessionScope.clap"),
-        file_in("CommonProgramFiles", "CLAP/SessionScope.clap"),
-    };
-    std::error_code error;
-    for (const fs::path &file : candidates) {
-        if (!file.empty() && fs::exists(file, error)) return true;
-    }
-    return false;
-#elif defined(__APPLE__)
-    // Every format has a per-user folder under ~/Library and a shared one under /Library.
-    namespace fs = std::filesystem;
-    const char *home = std::getenv("HOME");
-    const fs::path plugins_below = "Library/Audio/Plug-Ins";
-    const fs::path bundles[] = {"VST3/SessionScope.vst3", "CLAP/SessionScope.clap", "Components/SessionScope.component"};
-    std::error_code error;
-    for (const fs::path &bundle : bundles) {
-        if (home && fs::exists(fs::path(home) / plugins_below / bundle, error)) return true;
-        if (fs::exists(fs::path("/") / plugins_below / bundle, error)) return true;
-    }
-    return false;
-#else
-    return false;
-#endif
+// The window's size when nothing is saved, and its smallest, in CSS pixels: a long strip, across
+// or down.
+struct StripSize {
+    int width, height, min_width, min_height;
+};
+constexpr StripSize ACROSS = {960, 150, 300, 70};
+constexpr StripSize DOWN = {280, 640, 120, 240};
+
+// The demo has no DAW: its stand-in CPU follows the simulated song's lateness, so the meter
+// peaks where the song chokes. Labelled as generated, like the rest of the demo.
+static double demo_daw_cpu(const Snapshot &snapshot, double now) {
+    const double late = snapshot.late.p99 ? std::clamp(*snapshot.late.p99, 0.0, 1.0) : 0.0;
+    return std::clamp(0.07 + 0.03 * std::sin(now * 0.9) + 0.6 * late, 0.0, 1.0);
 }
 
 static int run_hud(const Options &opt) {
 #ifdef _WIN32
-    // Sleeps wake within 1 ms instead of Windows' default 15.6 ms, so pacing frames never misses one.
+    // Sleeps wake within 1 ms instead of Windows' default 15.6 ms.
     timeBeginPeriod(1);
 #endif
     // What the HUD remembers between runs (hud.ini). A screenshot run neither reads nor writes it,
@@ -142,12 +123,13 @@ static int run_hud(const Options &opt) {
     const bool remember = !opt.screenshot;
     const std::filesystem::path settings_file = remember ? hud_settings_file() : std::filesystem::path();
     HudSettings settings = remember ? load_hud_settings(settings_file) : HudSettings{};
+    if (opt.vertical) settings.vertical = true;
 
     std::string error;
     HudWindowOptions win_opts;
     win_opts.always_on_top = settings.on_top;
-    win_opts.place = settings.compact_mode ? settings.compact : settings.full;
-    if (settings.compact_mode) win_opts.min_width = win_opts.min_height = 80;   // set properly below
+    win_opts.place = settings.window;
+    win_opts.min_width = win_opts.min_height = 60;   // set properly once the display scale is known
     auto window = HudWindow::create(win_opts, error);
     if (!window) {
         show_error(error);
@@ -163,83 +145,78 @@ static int run_hud(const Options &opt) {
     HudView view(window->textures(), layout_scale, pixels_per_unit);   // fonts before the first frame
     view.apply(settings);
 
-    // Sizes in the web HUD's CSS pixels, turned into window units. The full layout keeps the
-    // window's original minimum; compact mode is a strip: the waveform and the readout.
-    const auto units = [layout_scale](double css) { return static_cast<int>(std::lround(css * layout_scale)); };
-    const WindowPlace compact_default{0, 0, units(640), units(150)};
-    const int compact_min_width = units(520), compact_min_height = units(110);
-    if (view.compact()) window->set_min_size(compact_min_width, compact_min_height);
+    const auto units = [layout_scale](int css) { return static_cast<int>(std::lround(css * layout_scale)); };
+    const auto strip = [](bool vertical) { return vertical ? DOWN : ACROSS; };
+    window->set_min_size(units(strip(view.vertical()).min_width), units(strip(view.vertical()).min_height));
+    if (!settings.window) {   // first run, or a screenshot run: the default strip
+        WindowPlace place = window->place();
+        place.width = units(strip(view.vertical()).width);
+        place.height = units(strip(view.vertical()).height);
+        window->set_place(place);
+    }
 
-    // Switches the window between its two sizes, each remembered separately.
-    const auto switch_window_size = [&](bool to_compact) {
-        const WindowPlace now = window->place();
-        if (to_compact) {
-            settings.full = now;
-            WindowPlace target = settings.compact.value_or(compact_default);
-            if (!settings.compact) {   // the first time: where the window is now
-                target.x = now.x;
-                target.y = now.y;
-            }
-            window->set_min_size(compact_min_width, compact_min_height);
-            window->set_place(target);
-        } else {
-            settings.compact = now;
-            WindowPlace target = settings.full.value_or(WindowPlace{now.x, now.y, units(960), units(620)});
-            window->set_min_size(win_opts.min_width, win_opts.min_height);
-            window->set_place(target);
-        }
+    // Across <-> down: the window turns, keeping its corner.
+    const auto turn_window = [&](bool vertical) {
+        WindowPlace place = window->place();
+        std::swap(place.width, place.height);
+        const StripSize size = strip(vertical);
+        window->set_min_size(units(size.min_width), units(size.min_height));
+        place.width = std::max(place.width, units(size.min_width));
+        place.height = std::max(place.height, units(size.min_height));
+        window->set_place(place);
     };
 
-    // The engine runs ten times a second; the window draws every display frame (VSync).
+    // The engine and the CPU readings run ten times a second; the window draws every display
+    // frame, so the heatmap slides smoothly in between.
     using clock = std::chrono::steady_clock;
+    const auto seconds = [](clock::time_point t) { return std::chrono::duration<double>(t.time_since_epoch()).count(); };
     auto next_tick = clock::now();
     constexpr auto tick_interval = std::chrono::milliseconds(100);
     const auto screenshot_time = clock::now() + std::chrono::milliseconds(opt.wait_ms);
     bool screenshot_taken = false;
-    bool installed = sensor_installed();
     const double frame_period = window->frame_period();
     constexpr double SWAP_MARGIN_S = 0.004;      // wake this long before the display wants the next frame
     constexpr double MIN_PACED_PERIOD_S = 0.007; // above about 140 Hz a frame is too short to sleep in
     auto last_swap = clock::now();
-    auto installed_checked_at = clock::now();
+
+    CpuMonitor cpu;
+    Snapshot snapshot;
+    const bool live = opt.replay_path.empty() && !opt.demo;
 
     while (!window->should_close()) {
-        // Stopped or waiting: nothing slides, so draw again only for the next engine update or
-        // the mouse (at most 100 ms away), instead of on every display frame.
-        if (!view.animating() && !opt.screenshot) {
-            window->wait_for_input(std::chrono::duration<double>(next_tick - clock::now()).count());
-        } else if (!window->paces_frames() && frame_period > MIN_PACED_PERIOD_S) {
-            // Playing, on OpenGL: sleep through most of the frame here. Some graphics drivers
-            // otherwise spin a core inside the buffer swap while they wait for the display
-            // (measured: 15 % of a core without this, 6 % with it). On Windows the renderer waits
-            // on the swap chain's frame-latency object instead, which needs no guessing.
+        if (!window->paces_frames() && frame_period > MIN_PACED_PERIOD_S) {
+            // OpenGL: sleep through most of the frame here. Some graphics drivers otherwise spin a
+            // core inside the buffer swap while they wait for the display (measured: 15 % of a
+            // core without this, 6 % with it). On Windows the renderer waits on the swap chain's
+            // frame-latency object instead, which needs no guessing.
             const double until_swap = std::chrono::duration<double>(last_swap - clock::now()).count() + frame_period;
             window->wait_for_input(until_swap - SWAP_MARGIN_S);
         }
 
         const auto now = clock::now();
         if (now >= next_tick) {
-            engine->select_bar(view.selected_bar());
             engine->tick();
-            view.receive(engine->snapshot(std::chrono::duration<double>(now.time_since_epoch()).count()));
+            snapshot = engine->snapshot(seconds(now));
+            const std::optional<int> bar = snapshot.playing ? snapshot.bar : std::nullopt;
+            // A replayed trace's process is long gone (its id may now be another program's).
+            const double host = live ? engine->source().host_process_id() : 0;
+            const std::optional<double> stand_in =
+                opt.demo ? std::optional<double>(demo_daw_cpu(snapshot, seconds(now))) : std::nullopt;
+            cpu.tick(seconds(now), host, bar, stand_in);
             next_tick += tick_interval;
             if (next_tick < now) next_tick = now;   // fell behind: catch up rather than burst
         }
-        if (now - installed_checked_at > std::chrono::seconds(3)) {   // a file check: not every frame
-            installed = sensor_installed();
-            installed_checked_at = now;
-        }
 
-        window->begin_frame();
-        const ViewRequests requests = view.draw(installed);
+        window->begin_frame();   // on Windows: waits here until the display can take the frame
+        const ViewRequests requests = view.draw(cpu, snapshot, seconds(clock::now()));
         if (requests.keep_on_top) window->set_on_top(*requests.keep_on_top);
-        if (requests.compact) switch_window_size(*requests.compact);
+        if (requests.vertical) turn_window(*requests.vertical);
 
         // The frame is read while it is drawn, so the request has to come before end_frame.
         const bool take_screenshot = opt.screenshot && !screenshot_taken && now >= screenshot_time;
         if (take_screenshot) window->request_screenshot(*opt.screenshot);
 
-        window->end_frame();   // waits for the display (VSync) while playing, so the loop never spins a core
+        window->end_frame();
         last_swap = clock::now();
 
         if (take_screenshot) {
@@ -253,7 +230,7 @@ static int run_hud(const Options &opt) {
     }
 
     if (remember) {
-        (view.compact() ? settings.compact : settings.full) = window->place();
+        settings.window = window->place();
         view.remember(settings);
         save_hud_settings(settings_file, settings);
     }

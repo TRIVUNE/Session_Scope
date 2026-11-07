@@ -3,6 +3,7 @@
 #ifndef _WIN32
 
 #include "renderer.h"
+#include "theme.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -42,7 +43,7 @@ public:
     }
 
     void present_blank() override {
-        glClearColor(0, 0, 0, 1);
+        glClearColor(BACKGROUND_RGBA[0], BACKGROUND_RGBA[1], BACKGROUND_RGBA[2], 1);
         glClear(GL_COLOR_BUFFER_BIT);
         present();
     }
@@ -53,7 +54,7 @@ public:
         int width, height;
         glfwGetFramebufferSize(window_, &width, &height);
         glViewport(0, 0, width, height);
-        glClearColor(0, 0, 0, 1);
+        glClearColor(BACKGROUND_RGBA[0], BACKGROUND_RGBA[1], BACKGROUND_RGBA[2], 1);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }

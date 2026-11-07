@@ -19,7 +19,7 @@ they appear. Why the code looks the way it does: [decision 0005](docs/decisions/
 | Path | What it is |
 | --- | --- |
 | `native/` | the sensor: one shared core (`sensor_core/`) wrapped as `SessionScope.vst3`, `SessionScope.clap` and, on macOS, `SessionScope.component` (Audio Unit). A pass-through effect for the master track that publishes one record per audio block into shared memory |
-| `engine/` | C++: the trace reader, statistics, reports and checks (`src/`), the console program `sessionscope` (`tools/`), the HUD window (`hud/`, GLFW + OpenGL + Dear ImGui) and the tests |
+| `engine/` | C++: the trace reader, statistics, reports and checks (`src/`), the console program `sessionscope` (`tools/`), the HUD window (`hud/`, GLFW + Dear ImGui, drawn with Direct3D 11 on Windows and OpenGL on macOS) and the tests |
 | `hosts/reaper/` | the optional REAPER add-on: JSFX (Sensor, Workload, Fixed Latency), ReaScripts (Record trace, Inventory, Build fixtures), the REAPER extension for realtime CPU, and their tests |
 | `tools/` | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners |
 | `docs/` | decisions, research records per spike, metric definitions |
@@ -39,16 +39,22 @@ on macOS.
 
 In your DAW: put **SessionScope Sensor** (TRIVUNE) on the **master track** and press play. If the
 DAW doesn't list it, rescan its plug-ins. Until the sensor plays, the HUD shows what's missing.
-Once it does, the HUD shows a lateness spectrogram and its profile, the bar map per pass, the
-waveform of late callbacks, the late p99 readout, and a list of bars below.
+The HUD is one long strip of modules, as in MiniMeters:
 
-`--demo` shows the HUD on generated data, without a DAW; `--replay <trace folder>` replays a
-recording.
+| Module | Shows |
+| --- | --- |
+| Peak meter | the DAW process's CPU, with a peak mark held for two seconds |
+| CPU number | the DAW's share of the whole machine, averaged over the last second |
+| Core heatmap | every core of the machine (green idle, red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline |
+| Bars list | every bar of the song and how late its blocks ran (late p99, worst pass); click a column title to sort |
 
-In the HUD, the words next to the level meter are buttons. **pin** keeps it on top, **list** folds
-the bar list away, and **compact** shrinks it to a strip with just the waveform and the readout
-(**full** brings everything back). Click a column title in the list to sort by it. Click a bar to
-see its blocks pass by pass: the median, the p99, the worst single block, and how many overran.
+Right-click anywhere to choose the modules shown, run them across or down, and keep the window
+on top. The DAW's CPU needs the sensor playing (it tells the HUD which process is the DAW); the
+core heatmap works without it.
+
+`--demo` shows the HUD on generated data, without a DAW (its CPU number is a stand-in); `--replay
+<trace folder>` replays a recording.
+
 The HUD remembers its place, size and these choices in `hud.ini` in your SessionScope settings
 folder (`%APPDATA%\SessionScope` on Windows, `~/Library/Application Support/SessionScope` on
 macOS); delete the file to start fresh.

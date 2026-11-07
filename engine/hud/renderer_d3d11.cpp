@@ -9,6 +9,7 @@
 #ifdef _WIN32
 
 #include "renderer.h"
+#include "theme.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -240,8 +241,7 @@ void D3D11Renderer::resize_if_needed() {
 
 void D3D11Renderer::present_blank() {
     WaitForSingleObjectEx(frame_ready_, 1000, TRUE);
-    const float black[4] = {0, 0, 0, 1};
-    context_->ClearRenderTargetView(render_target_.get(), black);
+    context_->ClearRenderTargetView(render_target_.get(), BACKGROUND_RGBA);
     present();
 }
 
@@ -256,8 +256,7 @@ void D3D11Renderer::begin_frame() {
 void D3D11Renderer::render() {
     ID3D11RenderTargetView *target = render_target_.get();
     context_->OMSetRenderTargets(1, &target, nullptr);
-    const float black[4] = {0, 0, 0, 1};
-    context_->ClearRenderTargetView(target, black);
+    context_->ClearRenderTargetView(target, BACKGROUND_RGBA);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 

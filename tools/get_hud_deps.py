@@ -5,15 +5,19 @@
 GLFW 3.4 (zlib licence) from https://github.com/glfw/glfw
 Dear ImGui v1.91.9 (MIT licence) from https://github.com/ocornut/imgui
 stb_image_write.h v1.16 (public domain) from https://github.com/nothings/stb, for screenshots
+Inter 4.1 (SIL Open Font Licence) from https://github.com/rsms/inter: two static weights, compiled
+into the HUD by build_engine.py
 
 Skips what is already there. After cloning, verifies the commit against pinned hashes
 and stops with an error if it differs. Also checks existing folders.
 """
 
 import hashlib
+import io
 import subprocess
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -76,6 +80,31 @@ def get_stb() -> None:
     print("stb_image_write.h verified")
 
 
+# Inter: the release zip, checked by SHA-256; only the two weights the HUD uses and the licence
+# are kept, in .toolchain/inter.
+INTER_DIR = TOOLCHAIN / "inter"
+INTER_URL = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
+INTER_SHA256 = "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e"
+INTER_FILES = ["extras/ttf/InterDisplay-Light.ttf", "extras/ttf/Inter-Regular.ttf", "LICENSE.txt"]
+
+
+def get_inter() -> None:
+    if all((INTER_DIR / Path(name).name).exists() for name in INTER_FILES):
+        print("Inter present")
+        return
+    print(f"Downloading {INTER_URL}")
+    with urllib.request.urlopen(INTER_URL) as response:
+        data = response.read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != INTER_SHA256:
+        raise SystemExit(f"Inter zip: SHA-256 {digest}, expected {INTER_SHA256}.")
+    INTER_DIR.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        for name in INTER_FILES:
+            (INTER_DIR / Path(name).name).write_bytes(archive.read(name))
+    print("Inter verified")
+
+
 def main() -> int:
     TOOLCHAIN.mkdir(exist_ok=True)
 
@@ -85,6 +114,7 @@ def main() -> int:
     verify_commit(GLFW_DEST, GLFW_COMMIT, "GLFW")
     verify_commit(IMGUI_DEST, IMGUI_COMMIT, "ImGui")
     get_stb()
+    get_inter()
 
     print("All dependencies ready.")
     return 0

@@ -45,13 +45,13 @@ public:
 
     ~Renderer() override = default;
 
-    // Shows a plain black frame without ImGui: before the window first appears, so it never
-    // flashes white, and before the view has loaded its fonts.
+    // Shows a plain background frame without ImGui: before the window first appears, so it never
+    // flashes black or white, and before the view has loaded its fonts.
     virtual void present_blank() = 0;
     // Start of a frame: waits until the display can take one (where the system offers that), then
     // starts ImGui's renderer frame.
     virtual void begin_frame() = 0;
-    // Draws ImGui's draw data over a black background.
+    // Draws ImGui's draw data over the theme's background (theme.h).
     virtual void render() = 0;
     // The frame just rendered, as RGB rows top to bottom. Call between render() and present().
     virtual bool read_pixels(int &width, int &height, std::vector<std::uint8_t> &rgb) = 0;

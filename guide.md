@@ -21,7 +21,7 @@ It is made of these parts, all in this repository:
 | --- | --- | --- |
 | Sensor (VST3) | The sensor for any host: one record per block (time, transport, tempo, signature, **bar start**, own cost) into shared memory `SessionScope_v2` | `native/vst3_sensor/` |
 | Engine | C++: trace reader and recorder, statistics, reports, checks, the HUD's engine, and the console program `sessionscope` (record, list, report, simulate) | `engine/src/`, `engine/tools/` |
-| HUD | C++ window (GLFW, OpenGL, Dear ImGui), always on top, drawn every display frame | `engine/hud/` |
+| HUD | C++ window (GLFW, Dear ImGui; Direct3D 11 + DirectComposition on Windows, OpenGL on macOS), always on top, drawn every display frame | `engine/hud/` |
 | REAPER add-on (optional) | Sensor JSFX, ReaScripts (recorder, inventory, fixture builder), and the extension that times REAPER's own work on every block (realtime CPU) into `host.csv` and shared memory `SessionScope_host_v1` | `hosts/reaper/` |
 | Tools | Build and install scripts (Python, build only), with the pinned Zig compiler | `tools/` |
 
@@ -36,14 +36,16 @@ REAPER ext. ──► shared memory "SessionScope_host_v1" ┤   engine/src/    
 trace folder ──► --replay, or --demo (no DAW) ───────┘
 ```
 
-One process: the engine does all measuring and statistics; the window only draws. The look follows MiniMeters: black, edge to edge,
-no panels; colour only in the data (inferno palette). Top: a **lateness spectrogram** (time →,
-how late each callback was ↑, brightness = blocks) with its **profile** on the right; middle: the
-**bar map** strip (one thin row per pass); bottom: the mirrored **waveform** of the worst lateness
-per 50 ms and the readout (late p99, level meter, hottest bar). REAPER's own CPU is not shown in
-the HUD (the extension still records it into traces for reports). To change the look, edit
-`engine/hud/hud_view.cpp` and rebuild (`python tools/build_engine.py`). To try it without a DAW:
-`build/engine/SessionScopeHUD.exe --demo`, or `--replay <trace folder>`.
+One process: the engine does all measuring and statistics; the window only draws. The HUD is a
+strip of **modules** (`engine/hud/modules.h`), across or down, picked from the right-click menu:
+**peak meter** and **CPU number** (the DAW process's CPU, `engine/src/cpu_monitor.h`), **core
+heatmap** (every core, green to red, with bar lines and numbers like a DAW timeline) and **bars
+list** (late p99 and worst pass per bar). The look is a plain light plug-in panel with Inter
+(`engine/hud/theme.h`). On Windows it draws like MiniMeters: Direct3D 11 into a DirectComposition
+flip swap chain with a frame-latency waitable object (`engine/hud/renderer_d3d11.cpp`). To add a
+module, write a `Module` in `engine/hud/modules.cpp` and add it to `make_modules`; rebuild with
+`python tools/build_engine.py`. To try it without a DAW: `build/engine/SessionScopeHUD.exe --demo`,
+or `--replay <trace folder>`.
 
 ## Where we are
 

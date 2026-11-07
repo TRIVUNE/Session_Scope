@@ -39,6 +39,18 @@ std::string place_text(const WindowPlace &p) {
            std::to_string(p.height);
 }
 
+// "meter,cpu,cores": the ids in order. Empty names are skipped.
+std::vector<std::string> to_list(std::string_view text) {
+    std::vector<std::string> out;
+    while (!text.empty()) {
+        const std::size_t comma = text.find(',');
+        const std::string_view item = text.substr(0, comma);
+        if (!item.empty()) out.emplace_back(item);
+        text = comma == std::string_view::npos ? std::string_view() : text.substr(comma + 1);
+    }
+    return out;
+}
+
 std::optional<bool> to_bool(std::string_view text) {
     if (text == "yes") return true;
     if (text == "no") return false;
@@ -63,12 +75,10 @@ HudSettings load_hud_settings(const std::filesystem::path &file) {
         const std::string_view key(line.data(), equals);
         const std::string_view value(line.data() + equals + 1, line.size() - equals - 1);
 
-        if (key == "window") settings.full = to_place(value);
-        else if (key == "compact_window") settings.compact = to_place(value);
-        else if (key == "compact" && to_bool(value)) settings.compact_mode = *to_bool(value);
+        if (key == "window") settings.window = to_place(value);
         else if (key == "on_top" && to_bool(value)) settings.on_top = *to_bool(value);
-        else if (key == "list" && to_bool(value)) settings.list_open = *to_bool(value);
-        else if (key == "sort" && !value.empty()) settings.sort_key = std::string(value);
+        else if (key == "modules") settings.modules = to_list(value);   // empty: none shown
+        else if (key == "vertical" && to_bool(value)) settings.vertical = *to_bool(value);
     }
     return settings;
 }
@@ -81,12 +91,12 @@ bool save_hud_settings(const std::filesystem::path &file, const HudSettings &set
     if (!out) return false;
     const auto yes_no = [](bool b) { return b ? "yes" : "no"; };
     out << "# SessionScope HUD settings, written when the HUD closes. Delete this file to start fresh.\n";
-    if (settings.full) out << "window=" << place_text(*settings.full) << "\n";
-    if (settings.compact) out << "compact_window=" << place_text(*settings.compact) << "\n";
-    out << "compact=" << yes_no(settings.compact_mode) << "\n";
+    if (settings.window) out << "window=" << place_text(*settings.window) << "\n";
     out << "on_top=" << yes_no(settings.on_top) << "\n";
-    out << "list=" << yes_no(settings.list_open) << "\n";
-    out << "sort=" << settings.sort_key << "\n";
+    out << "modules=";
+    for (std::size_t i = 0; i < settings.modules.size(); ++i) out << (i ? "," : "") << settings.modules[i];
+    out << "\n";
+    out << "vertical=" << yes_no(settings.vertical) << "\n";
     return static_cast<bool>(out);
 }
 
