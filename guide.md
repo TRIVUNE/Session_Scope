@@ -39,7 +39,7 @@ trace folder ──► --replay, or --demo (no DAW) ───────┘
 One process: the engine does all measuring and statistics; the window only draws. The HUD is a
 strip of **modules** (`engine/hud/modules.h`), across or down, picked from the right-click menu:
 **peak meter** and **CPU number** (the DAW process's CPU, `engine/src/cpu_monitor.h`), **core
-heatmap** (every core, green to red, with bar lines and numbers like a DAW timeline) and **bars
+heatmap** (every core, jet colours from dark blue to red, with bar lines and numbers like a DAW timeline) and **bars
 list** (late p99 and worst pass per bar). The look is a plain light plug-in panel with Inter
 (`engine/hud/theme.h`). On Windows it draws like MiniMeters: Direct3D 11 into a DirectComposition
 flip swap chain with a frame-latency waitable object (`engine/hud/renderer_d3d11.cpp`). To add a

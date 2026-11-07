@@ -40,18 +40,20 @@ std::string percent(std::optional<double> share) {
     return text;
 }
 
-// The heatmap's colours, a classic heat scale: green when idle, yellow at about half load,
-// orange, then red when the core is full.
+// The heatmap's colours, the "jet" scale of spectrum analysers: dark blue when idle, through
+// blue, cyan, green and yellow, to red when the core is full.
 ImU32 shade(float load) {
     struct Stop {
         float at;
         float r, g, b;
     };
-    static constexpr std::array<Stop, 5> stops = {{{0.00f, 46, 160, 80},
-                                                   {0.35f, 150, 196, 58},
-                                                   {0.55f, 245, 205, 50},
-                                                   {0.78f, 242, 125, 35},
-                                                   {1.00f, 214, 34, 40}}};
+    static constexpr std::array<Stop, 7> stops = {{{0.00f, 0, 0, 110},
+                                                   {0.15f, 0, 20, 255},
+                                                   {0.35f, 0, 200, 255},
+                                                   {0.50f, 20, 230, 90},
+                                                   {0.65f, 250, 250, 0},
+                                                   {0.82f, 255, 130, 0},
+                                                   {1.00f, 225, 0, 0}}};
     load = std::clamp(load, 0.0f, 1.0f);
     std::size_t i = 1;
     while (i + 1 < stops.size() && load > stops[i].at) ++i;
@@ -160,7 +162,8 @@ private:
 
 // One row per core, newest reading at the right edge, sliding left every display frame. The
 // readings arrive ten times a second; the picture is placed by their times, so it moves smoothly
-// in between. Bar starts are thin black lines with the bar number in a ruler above.
+// in between. Bar starts are thin lines (white over the colours) with the bar number in a
+// ruler above.
 class CoreHeatmap final : public Module {
 public:
     CoreHeatmap(const Fonts &fonts, TextureStore &textures) : fonts_(fonts), textures_(textures) {}
@@ -178,6 +181,7 @@ public:
         const float ruler = std::round(fonts_.text_size + 6 * frame.scale);
         const Box map = {in.x, in.y + ruler, in.w, in.h - ruler};
         draw->AddLine(at(map.x, map.y - 0.5f), at(map.x + map.w, map.y - 0.5f), colour::FILL);
+        draw->AddRectFilled(at(map.x, map.y), at(map.x + map.w, map.y + map.h), shade(0));   // no readings yet: idle
 
         const auto &samples = frame.cpu.samples();
         upload(samples);
@@ -198,7 +202,8 @@ public:
             const std::optional<int> bar = samples[i].bar;
             if (!bar || samples[i - 1].bar == bar) continue;
             const float x = std::round(x_of(samples[i].t - step)) + 0.5f;
-            draw->AddLine(at(x, in.y), at(x, map.y + map.h), colour::MARK);
+            draw->AddLine(at(x, in.y), at(x, map.y), colour::MARK);                   // in the ruler
+            draw->AddLine(at(x, map.y), at(x, map.y + map.h), IM_COL32(255, 255, 255, 200));   // over the colours
             const std::string label = std::to_string(*bar);
             draw->AddText(fonts_.text, fonts_.text_size, at(x + 3 * frame.scale, in.y + (ruler - fonts_.text_size) * 0.5f),
                           colour::TEXT, label.c_str());

@@ -45,7 +45,7 @@ The HUD is one long strip of modules, as in MiniMeters:
 | --- | --- |
 | Peak meter | the DAW process's CPU, with a peak mark held for two seconds |
 | CPU number | the DAW's share of the whole machine, averaged over the last second |
-| Core heatmap | every core of the machine (green idle, red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline |
+| Core heatmap | every core of the machine (dark blue idle, through cyan, green and yellow, to red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline |
 | Bars list | every bar of the song and how late its blocks ran (late p99, worst pass); click a column title to sort |
 
 Right-click anywhere to choose the modules shown, run them across or down, and keep the window

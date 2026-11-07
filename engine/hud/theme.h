@@ -3,7 +3,7 @@
 
 // The HUD's look, shared by every module: light and quiet, like a plain plug-in panel. A pale
 // grey background, white panels with thin dark borders, light-grey fills, the heatmap in heat
-// colours (green, yellow, red), Inter for all text.
+// colours ("jet": dark blue, cyan, green, yellow, red), Inter for all text.
 
 #include <imgui.h>
 
