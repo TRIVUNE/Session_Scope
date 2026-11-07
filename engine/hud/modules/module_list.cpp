@@ -11,6 +11,7 @@ std::vector<std::unique_ptr<Module>> make_modules(const Fonts &fonts, TextureSto
     modules.push_back(make_peak_meter());
     modules.push_back(make_cpu_number(fonts));
     modules.push_back(make_core_heatmap(fonts, textures));
+    modules.push_back(make_task_manager(fonts));
     modules.push_back(make_busiest_core(fonts));
     modules.push_back(make_dropouts(fonts));
     modules.push_back(make_memory_disk(fonts));

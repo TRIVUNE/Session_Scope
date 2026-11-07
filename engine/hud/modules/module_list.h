@@ -25,6 +25,7 @@ std::unique_ptr<Module> make_busiest_core(const Fonts &fonts);
 std::unique_ptr<Module> make_dropouts(const Fonts &fonts);
 std::unique_ptr<Module> make_memory_disk(const Fonts &fonts);
 std::unique_ptr<Module> make_cpu_clock_card(const Fonts &fonts);
+std::unique_ptr<Module> make_task_manager(const Fonts &fonts);
 
 // Every module, in their default order (the order of HudSettings::modules in hud_settings.h).
 std::vector<std::unique_ptr<Module>> make_modules(const Fonts &fonts, TextureStore &textures);

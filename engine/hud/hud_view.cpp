@@ -172,7 +172,7 @@ void HudView::clear_size(const std::string &id) {
     list.erase(std::remove_if(list.begin(), list.end(), [&](const ModuleSize &size) { return size.first == id; }), list.end());
 }
 
-ViewRequests HudView::draw(const SystemMonitor &system, const Snapshot &snapshot, double now) {
+ViewRequests HudView::draw(const SystemMonitor &system, const ProbeMonitor &probes, const Snapshot &snapshot, double now) {
     ImDrawList *draw = ImGui::GetWindowDrawList();
     const ImVec2 window_size = ImGui::GetIO().DisplaySize;
     draw->AddRectFilled(ImVec2(0, 0), window_size, colour::BACKGROUND);
@@ -185,7 +185,7 @@ ViewRequests HudView::draw(const SystemMonitor &system, const Snapshot &snapshot
     } else {
         lay_out(modules, window_size);
     }
-    const HudFrame frame{system, snapshot, now, scale_};
+    const HudFrame frame{system, snapshot, probes, now, scale_};
     for (std::size_t i = 0; i < modules.size(); ++i) {
         const Box &box = boxes_[i];
         if (box.w >= 1 && box.h >= 1) modules[i]->draw(draw, box, frame);   // skip boxes squeezed to nothing

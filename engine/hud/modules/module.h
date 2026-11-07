@@ -24,12 +24,14 @@
 //   dropouts   dropouts.cpp         audio blocks late enough to drop out, and the headroom left
 //   memory     memory_disk.cpp      the DAW's RAM, free RAM, disk reads
 //   clock      cpu_clock_card.cpp   the CPU's speed, and whether Windows is slowing it down
+//   tasks      task_manager.cpp     CPU per track and per plug-in, from the SessionScope Probes
 //
 // To add a module: copy the smallest one (cpu_number.cpp), change it, give it a new id, declare its
 // make_... function in module_list.h and add it to make_modules() in module_list.cpp.
 
 #include "hud_engine.h"       // Snapshot: what the engine measured from the sensor (lateness, transport)
 #include "look/theme.h"       // colours and fonts
+#include "probe_monitor.h"    // ProbeMonitor: CPU per track and plug-in, from the Probes
 #include "system_monitor.h"   // SystemMonitor: readings from this computer (cores, memory, clock)
 
 struct ImDrawList;   // Dear ImGui's list of things to draw this frame
@@ -40,6 +42,7 @@ namespace sessionscope {
 struct HudFrame {
     const SystemMonitor &system;   // the computer's readings, the last 12 seconds
     const Snapshot &snapshot;      // the engine's newest snapshot (transport, lateness, dropouts)
+    const ProbeMonitor &probes;    // CPU per track and plug-in (the Task Manager)
     double now;                    // the time now, in seconds, on the SystemMonitor's clock
     float scale;                   // window pixels per design pixel: 1.5 on a screen set to 150 %
 };

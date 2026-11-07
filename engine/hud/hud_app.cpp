@@ -13,7 +13,9 @@
 
 #include "hud_engine.h"        // HudEngine: turns sensor data into snapshots
 #include "hud_settings.h"      // hud.ini
+#include "demo_probes.h"       // the demo's made-up probes
 #include "hud_view.h"          // the modules and the menu
+#include "probe_monitor.h"     // CPU per track and plug-in
 #include "simulate.h"          // the demo's generated song
 #include "system_monitor.h"    // readings from this computer
 #include "window/desktop.h"
@@ -151,6 +153,9 @@ int run_hud(const HudOptions &options) {
     view->apply(settings);
     SystemMonitor system;
     Snapshot snapshot;
+    // CPU per track and plug-in: the real probes' table, or in the demo, made-up probes' own table.
+    std::unique_ptr<DemoProbes> demo_probes = options.demo ? std::make_unique<DemoProbes>() : nullptr;
+    ProbeMonitor probes(demo_probes ? demo_probes->table_name().c_str() : probes::TABLE_NAME);
     const bool live = options.replay_path.empty() && !options.demo;
 
     // Tray icon, hotkey, taskbar button (Windows). You can't have both no taskbar button and no
@@ -250,6 +255,8 @@ int run_hud(const HudOptions &options) {
             const std::optional<double> stand_in =
                 options.demo ? std::optional<double>(demo_daw_cpu(snapshot, seconds(now))) : std::nullopt;
             system.tick(seconds(now), daw_process, bar, stand_in);
+            if (demo_probes) demo_probes->tick(std::chrono::duration<double>(TICK).count(), snapshot.late.p99.value_or(0) * 4);
+            probes.tick(daw_process);
             // A window may have been dragged to a screen with another refresh rate.
             window->update_frame_limit();
             for (PopOutWindow &p : popouts) p.window->update_frame_limit();
@@ -296,7 +303,7 @@ int run_hud(const HudOptions &options) {
                 if (options.test_drag) play_test_drag(*options.test_drag, now >= drag_time, drag_step);
             });
             view->set_desktop_state(desktop_state);
-            const ViewRequests r = view->draw(system, snapshot, seconds(clock::now()));
+            const ViewRequests r = view->draw(system, probes, snapshot, seconds(clock::now()));
             if (r.keep_on_top) {
                 settings.on_top = *r.keep_on_top;
                 window->set_on_top(settings.on_top);
@@ -352,7 +359,7 @@ int run_hud(const HudOptions &options) {
             }
             it->window->begin_frame();
             it->view->set_desktop_state(desktop_state);
-            const ViewRequests r = it->view->draw(system, snapshot, seconds(clock::now()));
+            const ViewRequests r = it->view->draw(system, probes, snapshot, seconds(clock::now()));
             if (r.keep_on_top) it->window->set_on_top(*r.keep_on_top);
             it->window->end_frame();
             if (r.back_in) {   // "Back into the strip"

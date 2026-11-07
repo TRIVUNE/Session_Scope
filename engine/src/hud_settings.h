@@ -53,7 +53,7 @@ struct HudSettings {
     bool on_top = true;
     // The modules in the strip, in the order the person dragged them into, by id
     // (engine/hud/modules/module.h). Unknown ids are ignored.
-    std::vector<std::string> modules = {"meter", "cpu", "cores", "busiest", "dropouts", "memory", "clock"};
+    std::vector<std::string> modules = {"meter", "cpu", "cores", "tasks", "busiest", "dropouts", "memory", "clock"};
     bool vertical = false;                 // modules stacked top to bottom instead of left to right
     std::vector<ModuleSize> sizes_across;  // lengths set by dragging, in the horizontal layout
     std::vector<ModuleSize> sizes_down;    // ... and in the vertical one

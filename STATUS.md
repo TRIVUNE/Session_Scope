@@ -54,11 +54,16 @@ Two findings that shape gate G1:
 - [ ] Test the VST3 and CLAP sensors in other hosts (Bitwig, Cubase, Live); then S3 (probe pairs) if still wanted.
 - [x] HUD rebuilt as a web UI (Electron window) with realtime CPU from the extension's shared memory and a CPU-per-bar chart.
 - [x] Engine and HUD ported to C++ (`engine/`): one native process instead of Python + Electron; the Python analyser and the web HUD are removed.
-- [x] HUD: remembers its window and choices, compact mode, click a bar to see its blocks.
-- [ ] HUD: a settings panel, an installer (see guide.md).
+- [x] HUD redesigned as a MiniMeters-style strip of modules (Nov 2026): peak meter, DAW CPU, core heatmap with bar lines, busiest core, dropouts, memory and disk, CPU clock. Drag to reorder, drag gaps to resize, pop modules out into their own windows, horizontal or vertical, frame-rate limit, opacity, tray icon, hide from taskbar, Ctrl+Alt+H, real Windows menus. Direct3D 11 + DirectComposition on the screen's own GPU. Code map: `engine/hud/README.md`.
+- [x] Task Manager, phase 1: the probes' shared table (`native/sensor_core/probe_table.h`), the reader (`engine/src/probe_monitor.*`), the module (CPU and peak per track, click a track for its plug-ins), simulated probes in `--demo`. Plan: `handoff/task-manager-plan.md`.
+- [ ] **Task Manager, phase 2: the SessionScope Probe VST3 plug-in** that loads a real plug-in inside it and times it (audio, parameters, editor, state, latency passed through; a picker for the plug-in). Then Steinberg's validator, REAPER, another DAW.
+- [ ] Task Manager, phase 3: CLAP probe; track names from the host (VST3 `IInfoListener`, CLAP `track-info`); a way to wrap every plug-in on a track.
+- [ ] HUD: scrolling in the Task Manager when there are more tracks than fit; macOS versions of the tray icon, hotkey and menus (Windows-only now); the HTML prototype still shows the old design.
+- [ ] HUD: a settings panel (hotkey), an installer (see guide.md).
+- [ ] Open question: keep Python for building, or move to CMake / Zig's build system (nothing runs Python at run time).
 
 ### Gate G1: choose the MVP path
-- [ ] Write the decision record: path B (bar heatmap + latency + before/after comparisons) looks likely, since per-FX/per-track CPU isn't available. Decide which metric the heatmap shows in REAPER: realtime CPU (extension), the sensor proxy (after S2), or both.
+- [ ] Write the decision record: path B (bar heatmap + latency + before/after comparisons) looked likely while per-FX/per-track CPU wasn't available; the Probe (Task Manager phase 2) would make it available in any VST3 host, so revisit once it works. Decide which metric the heatmap shows in REAPER: realtime CPU (extension), the sensor proxy (after S2), or both.
 
 ### P2 onward (after G1)
 - [ ] P2: versioned measurement schema, local connection between sensor/extension and the HUD, storage, reconnect, golden-trace replay tests.

@@ -80,7 +80,7 @@ public:
     std::string first_title() const { return modules_.empty() ? std::string() : modules_.front()->title(); }
 
     // Draws one frame.
-    ViewRequests draw(const SystemMonitor &system, const Snapshot &snapshot, double now);
+    ViewRequests draw(const SystemMonitor &system, const ProbeMonitor &probes, const Snapshot &snapshot, double now);
 
 private:
     std::vector<Module *> shown() const;    // the modules shown, in the person's order

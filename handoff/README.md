@@ -41,12 +41,10 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
 
 ## Next, in order
 
-1. **Task Manager module with CPU per track and per plug-in.** The person chose a **wrapper
-   plug-in**: a "SessionScope Probe" VST3/CLAP that loads the real plug-in inside it, times each
-   of its blocks, and publishes the cost through shared memory with its track name. The HUD
-   module lists tracks, each expandable into its plug-ins, with each one's CPU. This is the main
-   missing piece and the biggest build (it means hosting VST3 and CLAP plug-ins inside ours,
-   passing through parameters, editor, latency and state). Plan it, show the plan, then build it.
+1. **Task Manager: the Probe plug-in (phase 2 of `task-manager-plan.md`).** Phase 1 is done: the
+   probes' shared table, the reader and the module work, shown in `--demo` by simulated probes.
+   Next is the SessionScope Probe VST3 plug-in that loads a real plug-in and times it; then the
+   CLAP probe and track names from the host (phase 3). The full to-do list is in `STATUS.md`.
 2. **The HTML prototype** (`design/hud-prototype/index.html`) still shows the old black
    spectrogram design. Bring it in line with the strip, or delete it if the person agrees.
 3. **Open question, ask before acting:** the person asked about removing Python. Python only
