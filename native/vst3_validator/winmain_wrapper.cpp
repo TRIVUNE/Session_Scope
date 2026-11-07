@@ -1,4 +1,4 @@
-// Entry point for building Steinberg's validator with Zig (tools/run_vst3_validator.py).
+// Entry point for building Steinberg's validator with Zig (native/CMakeLists.txt, target vst3_validator).
 // The validator only defines wmain, but Zig's MinGW startup code looks for WinMain, so this
 // provides one that calls it.
 

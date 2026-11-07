@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The Audio Unit's Info.plist: the usual bundle keys, plus AudioComponents, which tells macOS
+     what kind of Audio Unit this is. type aufx = an effect; subtype SScp and manufacturer Trvn must
+     match nothing else installed; version 768 = 0x000300 = 0.3.0. CMake fills in the ${...} parts. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleExecutable</key><string>SessionScope</string>
+	<key>CFBundleIdentifier</key><string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>SessionScope Sensor</string>
+	<key>CFBundlePackageType</key><string>BNDL</string>
+	<key>CFBundleShortVersionString</key><string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+	<key>CFBundleVersion</key><string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+	<key>CFBundleSignature</key><string>????</string>
+	<key>AudioComponents</key>
+	<array>
+		<dict>
+			<key>type</key><string>aufx</string>
+			<key>subtype</key><string>SScp</string>
+			<key>manufacturer</key><string>Trvn</string>
+			<key>name</key><string>TRIVUNE: SessionScope Sensor</string>
+			<key>description</key><string>Measures every audio block for the SessionScope HUD; audio passes through.</string>
+			<key>version</key><integer>768</integer>
+			<key>factoryFunction</key><string>SensorAUFactory</string>
+			<key>sandboxSafe</key><true/>
+			<key>tags</key><array><string>Effects</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>

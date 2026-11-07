@@ -14,6 +14,10 @@
 #   build/engine/sessionscope.exe     the console program (record, report, simulate...)
 #   build/engine/SessionScopeHUD.exe  the HUD window
 #   build/engine/tests/test_*.exe     the tests
+#   build/native/                     the sensor plug-ins and the REAPER extension (native/CMakeLists.txt)
+#
+#   ctest --preset windows            the tests (fast, no plug-ins loaded)
+#   ctest --preset windows-plugins    the official plug-in validators (close your DAW first)
 #
 # The pieces are described in engine/CMakeLists.txt (engine, console program, HUD, tests) and
 # cmake/third_party.cmake (GLFW, Dear ImGui, stb, Inter). Everything third-party is downloaded into
@@ -38,3 +42,4 @@ include(cmake/third_party.cmake)
 
 enable_testing()
 add_subdirectory(engine)
+add_subdirectory(native)
