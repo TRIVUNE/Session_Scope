@@ -47,16 +47,19 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
    module lists tracks, each expandable into its plug-ins, with each one's CPU. This is the main
    missing piece and the biggest build (it means hosting VST3 and CLAP plug-ins inside ours,
    passing through parameters, editor, latency and state). Plan it, show the plan, then build it.
-2. **Pop a module out into its own window** (MiniMeters lets you detach modules).
-3. **The HTML prototype** (`design/hud-prototype/index.html`) still shows the old black
+2. **The HTML prototype** (`design/hud-prototype/index.html`) still shows the old black
    spectrogram design. Bring it in line with the strip, or delete it if the person agrees.
-4. **Open question, ask before acting:** the person asked about removing Python. Python only
+3. **Open question, ask before acting:** the person asked about removing Python. Python only
    builds and installs (16 scripts in `tools/` and `hosts/reaper/tools/`); nothing runs it at run
    time. Options offered: keep it, CMake, or Zig's build system. No answer yet.
-5. **Ideas from MiniMeters' second REA pass, offered but not chosen yet** (`minimeters.md`):
-   resize handles between modules (with each module's size saved), an FPS limit (VSync / 60 /
-   30: at 120 Hz the HUD costs ~14 % of a core, at 60 ~6 %), a tray icon with hide-from-taskbar,
-   window opacity, and a global hotkey to show/hide the HUD.
+4. **macOS:** the tray icon, hotkey, taskbar choice and native menus are Windows-only so far
+   (`window/desktop.cpp`, `window/menu.cpp` have empty stand-ins); nothing on macOS was built or
+   run in this round.
+
+Done from MiniMeters' second REA pass (`minimeters.md`), all chosen by the person: resize handles
+between modules, pop-out windows, frame-rate limit, window opacity, tray icon, hide from taskbar,
+show/hide hotkey, and real Windows right-click menus (an ImGui menu was cut off by the thin strip).
+Not visually confirmed yet: the tray icon's picture (its menu item, setting and message window work).
 
 Code map for beginners: `engine/hud/README.md`. Every file starts with what it does and where its
 ideas and system calls come from; keep it that way (the person asked for comments everywhere,

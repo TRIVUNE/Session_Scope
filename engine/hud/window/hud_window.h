@@ -24,7 +24,8 @@
 #include "hud_settings.h"       // WindowPlace: a window's position and size
 #include "window/renderer.h"
 
-struct GLFWwindow;   // defined by GLFW
+struct GLFWwindow;     // defined by GLFW
+struct ImGuiContext;   // defined by Dear ImGui
 
 namespace sessionscope {
 
@@ -58,7 +59,16 @@ public:
     bool should_close() const;
     // True while the window is minimised to the taskbar: nothing to draw then.
     bool is_minimized() const;
+    // Hidden by the hotkey or the tray icon (not minimised: gone from the screen entirely).
+    void set_visible(bool visible);
+    bool is_visible() const;
+    // GLFW's window, for the few things that need it directly (menus, the taskbar button).
+    GLFWwindow *glfw() const { return window_; }
+    // This window's Dear ImGui state (each window has its own). Make it current before using
+    // ImGui for this window outside begin_frame/end_frame, for example to make its HudView.
+    ImGuiContext *imgui_context() const { return context_; }
     void set_on_top(bool on);
+    void set_title(const std::string &title);   // the text in the title bar
     // Sleeps until the mouse or keyboard does something, or `seconds` pass.
     void wait_for_input(double seconds);
     // Seconds between the frames the HUD draws: one screen refresh (1/120 s on a 120 Hz screen),
@@ -109,6 +119,7 @@ private:
     int refreshes_per_frame_ = 1;  // what the limit works out to on the current screen
 
     GLFWwindow *window_ = nullptr;
+    ImGuiContext *context_ = nullptr;
     std::unique_ptr<Renderer> renderer_;
     std::filesystem::path screenshot_path_;   // empty: no screenshot wanted
     bool screenshot_saved_ = false;

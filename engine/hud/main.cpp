@@ -9,6 +9,7 @@
 //   SessionScopeHUD --replay FOLDER      plays back a recording
 //   add --screenshot OUT.png [--wait MS] [--vertical]  to save one frame after MS milliseconds and quit
 //   add --test-drag X1,Y1,X2,Y2 to a screenshot run to play a mouse drag in (for testing)
+//   --settings FILE   use FILE instead of your hud.ini (tests use this so they never touch yours)
 //
 // This file only reads the command line; hud_app.cpp does the rest.
 //
@@ -50,6 +51,7 @@ HudOptions parse_args(int argc, char **argv) {
         else if (arg == "--screenshot" && has_value) options.screenshot = argv[++i];
         else if (arg == "--wait" && has_value) options.wait_ms = std::atoi(argv[++i]);
         else if (arg == "--vertical") options.vertical = true;
+        else if (arg == "--settings" && has_value) options.settings_file = argv[++i];
         else if (arg == "--test-drag" && has_value) {
             // Four numbers separated by commas: "300,60,900,60".
             std::array<float, 4> drag{};
@@ -64,7 +66,7 @@ HudOptions parse_args(int argc, char **argv) {
         else {
             sessionscope::show_error("Unknown or incomplete argument: " + arg +
                                      "\n\nUsage: SessionScopeHUD [--replay FOLDER] [--demo] [--vertical] "
-                                     "[--screenshot OUT.png] [--wait MS] [--test-drag X1,Y1,X2,Y2]");
+                                     "[--screenshot OUT.png] [--wait MS] [--test-drag X1,Y1,X2,Y2] [--settings FILE]");
             std::exit(2);
         }
     }

@@ -27,6 +27,9 @@ struct HudOptions {
     std::optional<std::filesystem::path> screenshot;  // --screenshot FILE.png: save one frame and quit
     int wait_ms = 4000;                               // --wait MS: how long before that screenshot
     bool vertical = false;                            // --vertical: modules top to bottom (for screenshots)
+    // --settings FILE: use this settings file instead of the person's own hud.ini. For tests, so a
+    // test run never changes the person's window, modules or pop-outs.
+    std::optional<std::filesystem::path> settings_file;
     // --test-drag X1,Y1,X2,Y2: for testing. Halfway to the screenshot, press the left mouse
     // button at (X1, Y1), move to (X2, Y2) and let go, in window pixels, as if done by hand. Fed
     // straight into Dear ImGui, so it tests our dragging and resizing code without depending on

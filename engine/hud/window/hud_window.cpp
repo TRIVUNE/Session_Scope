@@ -25,16 +25,50 @@
 
 namespace sessionscope {
 
+namespace {
+
 // stb hands the finished PNG over in pieces; this writes each piece to the open file.
-static void append_to_file(void *file, void *data, int size) {
+void append_to_file(void *file, void *data, int size) {
     static_cast<std::ofstream *>(file)->write(static_cast<const char *>(data), size);
 }
 
+// How many HUD windows exist. GLFW is started with the first and shut down after the last, so
+// closing a pop-out window doesn't take GLFW away from the others.
+int g_windows = 0;
+
+// ---- Mouse and keyboard, routed to the right window's Dear ImGui.
+// Each window has its own ImGui "context" (its own state). glfwPollEvents() delivers the events of
+// every window at once, so each event must first switch to the context of the window it belongs
+// to, then hand the event to Dear ImGui's GLFW code. (Dear ImGui's own advice for several windows
+// with several contexts: the comment above ImGui_ImplGlfw_GetBackendData in imgui_impl_glfw.cpp.)
+class SwitchTo {   // switches ImGui to a window's context, and back again when it goes out of scope
+public:
+    explicit SwitchTo(GLFWwindow *window) : previous_(ImGui::GetCurrentContext()) {
+        auto *hud = static_cast<HudWindow *>(glfwGetWindowUserPointer(window));
+        if (hud) ImGui::SetCurrentContext(hud->imgui_context());
+    }
+    ~SwitchTo() { ImGui::SetCurrentContext(previous_); }
+
+private:
+    ImGuiContext *previous_;
+};
+
+void on_focus(GLFWwindow *w, int focused) { SwitchTo s(w); ImGui_ImplGlfw_WindowFocusCallback(w, focused); }
+void on_enter(GLFWwindow *w, int entered) { SwitchTo s(w); ImGui_ImplGlfw_CursorEnterCallback(w, entered); }
+void on_move(GLFWwindow *w, double x, double y) { SwitchTo s(w); ImGui_ImplGlfw_CursorPosCallback(w, x, y); }
+void on_button(GLFWwindow *w, int button, int action, int mods) { SwitchTo s(w); ImGui_ImplGlfw_MouseButtonCallback(w, button, action, mods); }
+void on_scroll(GLFWwindow *w, double dx, double dy) { SwitchTo s(w); ImGui_ImplGlfw_ScrollCallback(w, dx, dy); }
+void on_key(GLFWwindow *w, int key, int scancode, int action, int mods) { SwitchTo s(w); ImGui_ImplGlfw_KeyCallback(w, key, scancode, action, mods); }
+void on_char(GLFWwindow *w, unsigned int c) { SwitchTo s(w); ImGui_ImplGlfw_CharCallback(w, c); }
+
+}  // namespace
+
 std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::string &error) {
-    if (!glfwInit()) {
+    if (g_windows == 0 && !glfwInit()) {
         error = "Failed to initialize GLFW";
         return nullptr;
     }
+    ++g_windows;   // counted from here; ~HudWindow, or the failure paths below, count it back down
 
     // "Hints" are settings for the next window GLFW makes.
     Renderer::set_window_hints();                       // what the renderer needs (OpenGL or not)
@@ -44,7 +78,7 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
 
     GLFWwindow *window = glfwCreateWindow(opts.width, opts.height, opts.title.c_str(), nullptr, nullptr);
     if (!window) {
-        glfwTerminate();
+        if (--g_windows == 0) glfwTerminate();
         error = "Failed to create the HUD window.";
         return nullptr;
     }
@@ -59,15 +93,27 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
 
     auto hud = std::unique_ptr<HudWindow>(new HudWindow(window));
 
-    // Dear ImGui keeps its state in a "context"; make it before the renderer, which sets up
-    // ImGui's drawing code.
+    // Dear ImGui keeps its state in a "context"; each window has its own. Made before the renderer,
+    // which sets up ImGui's drawing code, and left current so the caller can load fonts into it.
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    hud->context_ = ImGui::CreateContext();
+    ImGui::SetCurrentContext(hud->context_);
     ImGuiIO &io = ImGui::GetIO();
     io.IniFilename = nullptr;   // ImGui would otherwise write its own imgui.ini; we have hud.ini
 
     hud->renderer_ = Renderer::create(window, error);
     if (!hud->renderer_) return nullptr;   // `hud` is destroyed here, which closes the window
+
+    // Mouse and keyboard: our routing functions above, which find this HudWindow through GLFW's
+    // "user pointer".
+    glfwSetWindowUserPointer(window, hud.get());
+    glfwSetWindowFocusCallback(window, on_focus);
+    glfwSetCursorEnterCallback(window, on_enter);
+    glfwSetCursorPosCallback(window, on_move);
+    glfwSetMouseButtonCallback(window, on_button);
+    glfwSetScrollCallback(window, on_scroll);
+    glfwSetKeyCallback(window, on_key);
+    glfwSetCharCallback(window, on_char);
 
     // Show one frame in the background colour, then the window: it never flashes black or white.
     hud->renderer_->present_blank();
@@ -78,17 +124,30 @@ std::unique_ptr<HudWindow> HudWindow::create(const HudWindowOptions &opts, std::
 HudWindow::HudWindow(GLFWwindow *window) : window_(window) {}
 
 HudWindow::~HudWindow() {
+    ImGuiContext *previous = ImGui::GetCurrentContext();
+    if (context_) ImGui::SetCurrentContext(context_);   // shut down THIS window's ImGui, not another's
     renderer_.reset();   // shut ImGui's drawing code down while the window still exists
-    if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
+    if (context_) ImGui::DestroyContext(context_);
+    ImGui::SetCurrentContext(previous == context_ ? nullptr : previous);
     if (window_) {
+        glfwSetWindowUserPointer(window_, nullptr);
         glfwDestroyWindow(window_);
-        glfwTerminate();
     }
+    if (--g_windows == 0) glfwTerminate();
 }
 
 bool HudWindow::should_close() const { return glfwWindowShouldClose(window_); }
 
 bool HudWindow::is_minimized() const { return glfwGetWindowAttrib(window_, GLFW_ICONIFIED) == GLFW_TRUE; }
+
+void HudWindow::set_visible(bool visible) {
+    if (visible) glfwShowWindow(window_);
+    else glfwHideWindow(window_);
+}
+
+bool HudWindow::is_visible() const { return glfwGetWindowAttrib(window_, GLFW_VISIBLE) == GLFW_TRUE; }
+
+void HudWindow::set_title(const std::string &title) { glfwSetWindowTitle(window_, title.c_str()); }
 
 void HudWindow::set_on_top(bool on) { glfwSetWindowAttrib(window_, GLFW_FLOATING, on ? GLFW_TRUE : GLFW_FALSE); }
 
@@ -142,6 +201,7 @@ void HudWindow::set_opacity(int percent) {
 }
 
 void HudWindow::begin_frame(const std::function<void()> &before_new_frame) {
+    ImGui::SetCurrentContext(context_);   // this window's ImGui, until the next window's begin_frame
     renderer_->begin_frame();   // on Windows: sleeps here until the screen can take a new frame
     glfwPollEvents();           // after the wait, so this frame sees the newest mouse movement
     ImGui_ImplGlfw_NewFrame();  // tell ImGui where the mouse is, the window size, ...

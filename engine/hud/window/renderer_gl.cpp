@@ -51,7 +51,7 @@ public:
         window_ = window;
         glfwMakeContextCurrent(window);   // OpenGL calls from now on go to this window
         glfwSwapInterval(1);              // VSync: show each frame at the next screen refresh
-        ImGui_ImplGlfw_InitForOpenGL(window, true);
+        ImGui_ImplGlfw_InitForOpenGL(window, false);   // HudWindow routes mouse and keys to this window's ImGui
         ImGui_ImplOpenGL3_Init("#version 330 core");
         imgui_ready_ = true;
         return true;

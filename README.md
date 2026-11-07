@@ -52,9 +52,20 @@ The HUD is one long strip of modules, as in MiniMeters:
 | Memory and disk | the DAW's RAM, the machine's free RAM, and how fast the DAW reads (sample streaming) |
 | CPU clock | the CPU's speed against its rated speed, and whether the system caps it (heat, battery, power plan) |
 
-Drag a module to move it. Right-click anywhere to choose the modules shown, run them across or
-down, keep the window on top, or reset the layout. The DAW's readings need the sensor playing
-(it tells the HUD which process is the DAW); the core, memory and clock modules work without it.
+Using it:
+
+- **Move** a module: drag it. **Resize**: drag the gap between two modules; double-click the gap
+  to undo.
+- **Right-click** anywhere for the menu: which modules to show, **Pop out** the module under the
+  mouse into its own window (close that window to put it back), horizontal or vertical, **Frame
+  rate** (the screen's rate, 60 or 30 fps: lower uses less CPU), **Opacity**, keep on top, show in
+  taskbar, tray icon, reset layout, quit.
+- **Ctrl+Alt+H** shows or hides the HUD from any program (change it with `hotkey=` in `hud.ini`).
+- **Tray icon** (optional): click to show or hide, right-click to quit. Turning the taskbar button
+  off turns the tray icon on, so the HUD can't get lost.
+
+The DAW's readings need the sensor playing (it tells the HUD which process is the DAW); the core,
+memory and clock modules work without it. Tray icon, hotkey and taskbar choice are Windows-only.
 
 `--demo` shows the HUD on generated data, without a DAW (its CPU number is a stand-in); `--replay
 <trace folder>` replays a recording.

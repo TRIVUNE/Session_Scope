@@ -179,7 +179,7 @@ bool D3D11Renderer::init(GLFWwindow *window, std::string &error) {
     if (!create_device(error) || !create_swap_chain(error) || !create_composition(error)) return false;
     create_render_target();
 
-    ImGui_ImplGlfw_InitForOther(window, true);           // ImGui reads mouse and keys from GLFW...
+    ImGui_ImplGlfw_InitForOther(window, false);          // ImGui reads mouse and keys from GLFW (HudWindow routes them)...
     ImGui_ImplDX11_Init(device_.get(), context_.get());  // ...and draws with Direct3D 11
     imgui_ready_ = true;
     return true;
