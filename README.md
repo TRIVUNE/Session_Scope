@@ -117,15 +117,19 @@ list > New action > Load ReaScript*, and load the three `SessionScope - ...` scr
 
 ## Tests
 
+Building and testing use CMake (installed portable in `C:\tools`; see `handoff/cmake-move.md`):
+
 ```sh
-python tools/build_engine.py --test                   # engine tests (C++)
-python tools/run_vst3_validator.py                    # Windows: Steinberg's VST3 validator
-python tools/run_clap_validator.py                    # clap-validator, and a host that reads the records
-python tools/check_mac_plugins.py                     # macOS: VST3 validator, clap-validator, auval
+cmake --preset windows                                # once: set up build/cmake ("mac" on a Mac)
+cmake --build --preset windows                        # build everything that changed
+ctest --preset windows                                # engine, HUD and sensor-core tests (C++)
+ctest --preset windows-plugins                        # Steinberg's VST3 validator, clap-validator, a CLAP host
+                                                      # (macOS adds auval; close your DAW first)
 cd hosts/reaper/tests && npm install && npm test      # REAPER add-on: Lua modules under a fake REAPER
 ```
 
-CI (`.github/workflows/ci.yml`) runs these on Windows and macOS for every push and every pull request.
+There is no CI set up at the moment. The Python scripts in `tools/` still install the plug-ins and
+run the REAPER tools until the CMake move's last phase replaces them.
 
 ## Where this is going
 

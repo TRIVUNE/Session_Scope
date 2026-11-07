@@ -65,7 +65,8 @@ keeps measuring but stops drawing); about 76 MB of memory.
 ## Building and checking
 
 ```sh
-python tools/build_engine.py --test                       # build everything, run every test
+cmake --build --preset windows                            # build (after `cmake --preset windows` once)
+ctest --preset windows                                    # run every test
 build/engine/SessionScopeHUD.exe --demo                   # try it without a DAW
 build/engine/SessionScopeHUD.exe --demo --screenshot out.png --wait 9000   # one picture
 build/engine/SessionScopeHUD.exe --demo --screenshot out.png --wait 6000 --test-drag 1607,150,1757,150

@@ -46,7 +46,7 @@ heatmap** (every core, numbered, jet colours, bar lines like a DAW timeline), **
 flip swap chain with a frame-latency waitable object (`engine/hud/window/renderer_d3d11.cpp`, on the GPU that drives the window's screen). To add a
 module, copy `engine/hud/modules/cpu_number.cpp`, change it, and list it in `modules/module_list.*`
 (`engine/hud/README.md` has a map of the code); rebuild with
-`python tools/build_engine.py`. To try it without a DAW: `build/engine/SessionScopeHUD.exe --demo`,
+`cmake --build --preset windows`. To try it without a DAW: `build/engine/SessionScopeHUD.exe --demo`,
 or `--replay <trace folder>`.
 
 ## Where we are
@@ -194,10 +194,11 @@ CPU (finding D); per-track rows need path A or another host.
 ## How to check everything still works
 
 ```sh
-python tools/build_engine.py --test                          # engine, console program, HUD; C++ tests
+cmake --build --preset windows                               # everything: engine, HUD, sensors, extension
+ctest --preset windows                                       # C++ tests
+ctest --preset windows-plugins                               # VST3 + CLAP validators (close your DAW)
 cd hosts/reaper/tests && npm test                            # Lua, fake REAPER
-python tools/build_native.py                                 # the sensor and the REAPER extension
-python hosts/reaper/tools/reaper_validate.py                 # real REAPER, isolated, ~5 minutes
+python hosts/reaper/tools/reaper_validate.py                 # real REAPER, isolated, ~5 minutes (Python until the CMake move's phase 3)
 build/engine/SessionScopeHUD.exe --replay <trace> --screenshot out.png   # one HUD frame to a PNG
 ```
 

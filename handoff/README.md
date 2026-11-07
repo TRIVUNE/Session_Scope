@@ -1,7 +1,7 @@
 # Handoff: where the HUD is going
 
 For the next AI agent working on this repository. Read this first, then `README.md` and `guide.md`.
-Last updated 2026-11-07.
+Last updated 2026-11-07 (evening).
 
 ## The direction
 
@@ -21,8 +21,8 @@ and drags them into the order they want.
   red. Red text only for values that mean trouble.
 - **Only what helps a session.** The person strips anything that isn't useful: no status lines,
   no labels for their own sake, no logos.
-- **Native and fast.** C++ only at run time, readable code with plain comments. Python is used only
-  to build (an open question: see below).
+- **Native and fast.** C++ only at run time, readable code with plain comments. The build is
+  moving from Python to CMake (`cmake-move.md`).
 
 ## Done
 
@@ -45,9 +45,10 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
    probes' shared table, the reader and the module work, shown in `--demo` by simulated probes.
    Next is the SessionScope Probe VST3 plug-in that loads a real plug-in and times it; then the
    CLAP probe and track names from the host (phase 3). The full to-do list is in `STATUS.md`.
-2. **Build with CMake instead of Python** (the person's decision, Nov 2026): every script in
-   `tools/` and `hosts/reaper/tools/` moves to CMake, then Python is removed. In progress; see
-   `STATUS.md`.
+2. **Build with CMake instead of Python, phase 3** (the person's decision): phases 1 and 2 are
+   done (CMake builds and tests everything); phase 3 (installing, the REAPER tools, setup, deleting
+   Python, docs) is **not started: the person said to stop before it. Ask before starting.**
+   Everything you need is in `cmake-move.md`.
 3. **The big check, 4 passes** (the person's request): see `STATUS.md`.
 4. **macOS:** the tray icon, hotkey, taskbar choice and native menus are Windows-only so far
    (`window/desktop.cpp`, `window/menu.cpp` have empty stand-ins); nothing on macOS was built or
@@ -79,8 +80,16 @@ engine still computes the bar chart for `sessionscope report`.
   agents in this project.
 - **Ask before building** something new: offer options, build only what is picked.
 - **Commit after each phase**, with a plain message saying what changed and why.
-- **Check what you build:** `python tools/build_engine.py --test` (every test must pass, warnings
-  are errors), then look at the HUD with
+- **Check what you build:** `cmake --build --preset windows`, then `ctest --preset windows` (every
+  test must pass; warnings are errors in our code) and, after plug-in changes,
+  `ctest --preset windows-plugins`. Then look at the HUD with
   `build/engine/SessionScopeHUD.exe --demo --screenshot out.png --wait 9000` (add `--vertical`
   for the column layout).
 - The demo has no DAW, so its DAW CPU is a stand-in; say so wherever it matters.
+- **Never touch the person's own `hud.ini`** (`%APPDATA%\SessionScope`) in tests: pass
+  `--settings <scratch file>`; screenshot runs don't read or write settings at all. Their settings
+  were lost once this way.
+- **Test drags with `--test-drag X1,Y1,X2,Y2`**, not a script-moved mouse: this screen runs at
+  200 %, and Windows rescales a non-DPI-aware script's mouse, so it can't aim.
+- **Shell edits mangle backslashes** in this environment's bash heredocs (`\n`, `\x`, `\;`): edit
+  files with the Edit/Write tools when the text has backslashes.
