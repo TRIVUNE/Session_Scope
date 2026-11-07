@@ -31,12 +31,15 @@ int main() {
         burn(200);
         const std::vector<double> shares = cores.sample();
         CHECK(!shares.empty());
-        double busiest = 0;
+        double total = 0;
         for (const double share : shares) {
             CHECK(share >= 0.0 && share <= 1.0);
-            if (share > busiest) busiest = share;
+            total += share;
         }
-        CHECK(busiest > 0.5);   // the burning core was busy for most of the time
+        // One thread burned for the whole time, so all cores together were busy at least about
+        // one core's worth. (Not "one core over 50 %": Windows may move the thread between cores,
+        // spreading its time over several.)
+        CHECK(total > 0.5);
     }
 
     // SystemMonitor follows a process by id: this test's own, which is busy.
