@@ -60,8 +60,17 @@ public:
     void set_on_top(bool on);
     // Sleeps until the mouse or keyboard does something, or `seconds` pass.
     void wait_for_input(double seconds);
-    // Seconds between screen refreshes (1/60 if unknown): 1/120 on a 120 Hz screen.
+    // Seconds between the frames the HUD draws: one screen refresh (1/120 s on a 120 Hz screen),
+    // or longer when the frame rate is limited.
     double frame_period() const;
+    // Limits the frame rate: 0 = every screen refresh, 60 or 30 = about that many frames a second.
+    // The HUD can only skip whole refreshes, so on a 144 Hz screen "60" gives every 2nd = 72.
+    void set_frame_limit(int fps);
+    // Checks which screen the window is on now (it may have been dragged to another one with a
+    // different refresh rate) and adjusts the frame limit. Cheap; call about once a second.
+    void update_frame_limit();
+    // How solid the window is, in percent: 100 = solid, 25 = mostly see-through.
+    void set_opacity(int percent);
     // True if begin_frame() itself waits for the screen (Windows), so the caller needn't sleep.
     bool paces_frames() const { return renderer_->paces_frames(); }
     // Where the modules put their pictures (the core heatmap).
@@ -90,6 +99,11 @@ public:
 private:
     explicit HudWindow(GLFWwindow *window);   // use create() instead
     bool save_screenshot(const std::filesystem::path &path) const;
+    // The refresh rate (Hz) of the screen under the window's middle; 60 if unknown.
+    int refresh_rate() const;
+
+    int fps_limit_ = 0;            // 0 = no limit
+    int refreshes_per_frame_ = 1;  // what the limit works out to on the current screen
 
     GLFWwindow *window_ = nullptr;
     std::unique_ptr<Renderer> renderer_;

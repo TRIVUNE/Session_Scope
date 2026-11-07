@@ -87,6 +87,12 @@ public:
 
     void present() override { glfwSwapBuffers(window_); }
 
+    // glfwSwapInterval(n): each swap waits for n screen refreshes (needs this window's context current).
+    void set_frames_per_refresh(int refreshes) override {
+        glfwMakeContextCurrent(window_);
+        glfwSwapInterval(refreshes < 1 ? 1 : refreshes);
+    }
+
     // OpenGL has nothing to wait on before a frame, so hud_app.cpp does the waiting.
     bool paces_frames() const override { return false; }
 

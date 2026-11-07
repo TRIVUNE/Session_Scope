@@ -9,6 +9,8 @@
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <vector>
@@ -94,10 +96,49 @@ void HudWindow::wait_for_input(double seconds) {
     if (seconds > 0) glfwWaitEventsTimeout(seconds);
 }
 
-double HudWindow::frame_period() const {
-    GLFWmonitor *monitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode *mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
-    return mode && mode->refreshRate > 0 ? 1.0 / mode->refreshRate : 1.0 / 60.0;
+int HudWindow::refresh_rate() const {
+    // The window's middle point...
+    int x, y, w, h;
+    glfwGetWindowPos(window_, &x, &y);
+    glfwGetWindowSize(window_, &w, &h);
+    const int mid_x = x + w / 2, mid_y = y + h / 2;
+    // ...and the screen it's on (GLFW calls screens "monitors"). Off every screen: the main one.
+    int count = 0;
+    GLFWmonitor **monitors = glfwGetMonitors(&count);
+    GLFWmonitor *found = glfwGetPrimaryMonitor();
+    for (int m = 0; m < count; ++m) {
+        int mx, my;
+        glfwGetMonitorPos(monitors[m], &mx, &my);
+        const GLFWvidmode *mode = glfwGetVideoMode(monitors[m]);
+        if (mode && mid_x >= mx && mid_x < mx + mode->width && mid_y >= my && mid_y < my + mode->height) found = monitors[m];
+    }
+    const GLFWvidmode *mode = found ? glfwGetVideoMode(found) : nullptr;
+    return mode && mode->refreshRate > 0 ? mode->refreshRate : 60;
+}
+
+double HudWindow::frame_period() const { return static_cast<double>(refreshes_per_frame_) / refresh_rate(); }
+
+void HudWindow::set_frame_limit(int fps) {
+    fps_limit_ = fps;
+    update_frame_limit();
+}
+
+void HudWindow::update_frame_limit() {
+    // How many refreshes per frame come closest to the limit: 120 Hz with a 60 limit -> 2,
+    // 60 Hz with a 60 limit -> 1, 144 Hz with 30 -> 5 (28.8 frames a second).
+    const int refresh = refresh_rate();
+    int refreshes = 1;
+    if (fps_limit_ > 0) refreshes = std::max(1, static_cast<int>(std::lround(static_cast<double>(refresh) / fps_limit_)));
+    if (refreshes != refreshes_per_frame_) {
+        refreshes_per_frame_ = refreshes;
+        renderer_->set_frames_per_refresh(refreshes);
+    }
+}
+
+// GLFW makes the window "layered" and tells Windows its opacity; Windows blends it with whatever
+// is behind. (macOS: the same through Cocoa.)
+void HudWindow::set_opacity(int percent) {
+    glfwSetWindowOpacity(window_, static_cast<float>(std::clamp(percent, 25, 100)) / 100.0f);
 }
 
 void HudWindow::begin_frame() {

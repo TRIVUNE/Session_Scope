@@ -110,6 +110,8 @@ int run_hud(const HudOptions &options) {
     const double layout_scale = window->content_scale() / pixels_per_unit;
     HudView view(window->textures(), layout_scale, pixels_per_unit);   // loads the fonts: before the first frame
     view.apply(settings);
+    window->set_frame_limit(settings.fps);
+    if (settings.opacity < 100) window->set_opacity(settings.opacity);
     SystemMonitor system;
     Snapshot snapshot;
     const bool live = options.replay_path.empty() && !options.demo;
@@ -167,6 +169,8 @@ int run_hud(const HudOptions &options) {
             const std::optional<double> stand_in =
                 options.demo ? std::optional<double>(demo_daw_cpu(snapshot, seconds(now))) : std::nullopt;
             system.tick(seconds(now), daw_process, bar, stand_in);
+            // The window may have been dragged to a screen with another refresh rate.
+            window->update_frame_limit();
             next_tick += TICK;
             if (next_tick < now) next_tick = now;   // fell behind (the computer was busy): don't try to catch up in a burst
         }
@@ -183,6 +187,8 @@ int run_hud(const HudOptions &options) {
         const ViewRequests requests = view.draw(system, snapshot, seconds(clock::now()));
         if (requests.keep_on_top) window->set_on_top(*requests.keep_on_top);
         if (requests.vertical) turn_window(*requests.vertical);
+        if (requests.fps) window->set_frame_limit(*requests.fps);
+        if (requests.opacity) window->set_opacity(*requests.opacity);
 
         const bool take_screenshot = options.screenshot && !screenshot_taken && now >= screenshot_time;
         if (take_screenshot) window->request_screenshot(*options.screenshot);   // must be asked before end_frame()

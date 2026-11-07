@@ -3,6 +3,7 @@
 #include "hud_settings.h"
 #include "test_support.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -34,6 +35,42 @@ int main() {
         CHECK(s.window && s.window->x == -1200 && s.window->y == 40 && s.window->width == 1920 && s.window->height == 160);
         CHECK(!s.on_top && s.vertical);
         CHECK((s.modules == std::vector<std::string>{"cores", "meter"}));
+    }
+
+    // The newer settings: sizes, frame rate, opacity, tray, taskbar, hotkey, pop-outs.
+    {
+        HudSettings saved;
+        saved.sizes_across = {{"cores", 640}, {"busiest", 160}};
+        saved.sizes_down = {{"cores", 300}};
+        saved.fps = 60;
+        saved.opacity = 75;
+        saved.tray = true;
+        saved.taskbar = false;
+        saved.hotkey = "ctrl+shift+f12";
+        saved.popouts = {{"dropouts", WindowPlace{1500, 80, 180, 160}}};
+        CHECK(save_hud_settings(file, saved));
+
+        const HudSettings s = load_hud_settings(file);
+        CHECK((s.sizes_across == std::vector<ModuleSize>{{"cores", 640}, {"busiest", 160}}));
+        CHECK((s.sizes_down == std::vector<ModuleSize>{{"cores", 300}}));
+        CHECK(s.fps == 60 && s.opacity == 75 && s.tray && !s.taskbar && s.hotkey == "ctrl+shift+f12");
+        CHECK(s.popouts.size() == 1 && s.popouts[0].module == "dropouts" && s.popouts[0].place.x == 1500 &&
+              s.popouts[0].place.height == 160);
+        // A popped-out module is not also in the strip.
+        CHECK(std::find(s.modules.begin(), s.modules.end(), "dropouts") == s.modules.end());
+    }
+
+    // Bad values in the newer settings fall back to the defaults.
+    {
+        std::ofstream(file) << "fps=45\n"                          // only 0, 30 or 60
+                            << "opacity=5\n"                       // clamped up to 25
+                            << "sizes_across=cores:x,:5,meter:30\n"   // only the valid piece stays
+                            << "popout=cores@1,2\n";               // not a window place
+        const HudSettings s = load_hud_settings(file);
+        CHECK(s.fps == 0);
+        CHECK(s.opacity == 25);
+        CHECK((s.sizes_across == std::vector<ModuleSize>{{"meter", 30}}));
+        CHECK(s.popouts.empty());
     }
 
     // Every module hidden is a choice too, and comes back as such.

@@ -75,6 +75,10 @@ public:
     virtual bool read_pixels(int &width, int &height, std::vector<std::uint8_t> &rgb) = 0;
     // Puts the frame on screen at the next screen refresh.
     virtual void present() = 0;
+    // Show a new frame only every `refreshes` screen refreshes: 1 = every refresh (as smooth as the
+    // screen allows), 2 = every other one (half the frame rate, about half the CPU and GPU work).
+    // This is how the "Frame rate" menu limits the HUD to 60 or 30 frames a second.
+    virtual void set_frames_per_refresh(int refreshes) = 0;
     // True if begin_frame() already waits for the screen (Windows), so nobody else needs to sleep.
     virtual bool paces_frames() const = 0;
 };

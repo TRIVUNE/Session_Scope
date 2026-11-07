@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "look/fonts_data.h"
 #include "modules/module_list.h"
@@ -75,12 +76,16 @@ void HudView::apply(const HudSettings &settings) {
     shown_ids_ = settings.modules;
     vertical_ = settings.vertical;
     on_top_ = settings.on_top;
+    fps_ = settings.fps;
+    opacity_ = settings.opacity;
 }
 
 void HudView::remember(HudSettings &settings) const {
     settings.modules = shown_ids_;
     settings.vertical = vertical_;
     settings.on_top = on_top_;
+    settings.fps = fps_;
+    settings.opacity = opacity_;
 }
 
 std::vector<Module *> HudView::shown() const {
@@ -228,6 +233,26 @@ ViewRequests HudView::menu() {
     if (ImGui::MenuItem("Horizontal", nullptr, !vertical_) && vertical_) requests.vertical = vertical_ = false;
     if (ImGui::MenuItem("Vertical", nullptr, vertical_) && !vertical_) requests.vertical = vertical_ = true;
     ImGui::Separator();
+    // Frame rate: the screen's own rate is the smoothest; 60 or 30 use less CPU and GPU
+    // (measured: about 14 % of a core at 120 frames a second, 6 % at 60).
+    if (ImGui::BeginMenu("Frame rate")) {
+        struct Choice {
+            const char *label;
+            int fps;
+        };
+        for (const Choice &choice : {Choice{"Screen rate (smoothest)", 0}, Choice{"60 fps", 60}, Choice{"30 fps", 30}}) {
+            if (ImGui::MenuItem(choice.label, nullptr, fps_ == choice.fps)) requests.fps = fps_ = choice.fps;
+        }
+        ImGui::EndMenu();
+    }
+    // Opacity: see the desktop or DAW through the HUD.
+    if (ImGui::BeginMenu("Opacity")) {
+        for (const int percent : {100, 75, 50, 25}) {
+            const std::string label = std::to_string(percent) + " %";
+            if (ImGui::MenuItem(label.c_str(), nullptr, opacity_ == percent)) requests.opacity = opacity_ = percent;
+        }
+        ImGui::EndMenu();
+    }
     if (ImGui::MenuItem("Keep on top", nullptr, on_top_)) requests.keep_on_top = on_top_ = !on_top_;
     if (ImGui::MenuItem("Reset layout")) shown_ids_ = HudSettings{}.modules;   // the default modules and order
     ImGui::EndPopup();

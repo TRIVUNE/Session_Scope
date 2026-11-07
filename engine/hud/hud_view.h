@@ -36,6 +36,8 @@ namespace sessionscope {
 struct ViewRequests {
     std::optional<bool> keep_on_top;   // "Keep on top" was clicked: the new value
     std::optional<bool> vertical;      // horizontal/vertical changed: turn the window
+    std::optional<int> fps;            // a frame-rate limit was picked: 0, 60 or 30
+    std::optional<int> opacity;        // an opacity was picked, in percent
 };
 
 class HudView {
@@ -69,6 +71,8 @@ private:
     std::optional<std::size_t> dragging_;            // which shown module is being dragged, if any
     bool vertical_ = false;
     bool on_top_ = true;
+    int fps_ = 0;          // frame-rate limit, 0 = the screen's rate
+    int opacity_ = 100;    // percent
 };
 
 }  // namespace sessionscope

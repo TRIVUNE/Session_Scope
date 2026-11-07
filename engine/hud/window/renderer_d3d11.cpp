@@ -115,6 +115,7 @@ public:
     void render() override;
     bool read_pixels(int &width, int &height, std::vector<std::uint8_t> &rgb) override;
     void present() override;
+    void set_frames_per_refresh(int refreshes) override { refreshes_per_frame_ = refreshes < 1 ? 1 : refreshes; }
     bool paces_frames() const override { return true; }
 
     ImTextureID upload_texture(ImTextureID existing, int width, int height, const std::uint32_t *rgba) override;
@@ -147,6 +148,7 @@ private:
     Com<IDCompositionTarget> composition_target_;  // ... attached to our window
     Com<IDCompositionVisual> visual_;              // ... showing our swap chain
     HANDLE frame_ready_ = nullptr;                 // signalled when the screen can take a new frame
+    UINT refreshes_per_frame_ = 1;                 // 1 = a frame every screen refresh (see set_frames_per_refresh)
     int buffer_width_ = 0;                         // the swap chain's current size, in pixels
     int buffer_height_ = 0;
     bool imgui_ready_ = false;
@@ -361,8 +363,11 @@ bool D3D11Renderer::read_pixels(int &width, int &height, std::vector<std::uint8_
     return true;
 }
 
-// Show the frame at the next screen refresh (the 1 means "wait for 1 refresh"; that's VSync).
-void D3D11Renderer::present() { swap_chain_->Present(1, 0); }
+// Show the frame in step with the screen. The first number is how many screen refreshes it stays
+// up: 1 = the next refresh (VSync), 2 = every other refresh (half the frame rate). Because we wait
+// on the frame-latency object before each frame, a 2 here also makes the whole loop run at half
+// speed: the processor sleeps through the extra refresh.
+void D3D11Renderer::present() { swap_chain_->Present(refreshes_per_frame_, 0); }
 
 // Puts a picture on the graphics card (see renderer.h). Called by the heatmap about ten times a
 // second, so it reuses the texture when the size hasn't changed.
