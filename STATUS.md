@@ -62,6 +62,9 @@ Two findings that shape gate G1:
 - [x] Old HTML prototype (`design/hud-prototype/`) deleted: `SessionScopeHUD.exe --demo` shows the design.
 - [ ] HUD: a settings panel (hotkey), an installer (see guide.md).
 - [ ] **Build with CMake instead of Python** (decided Nov 2026). Every script in `tools/` and `hosts/reaper/tools/` moves to CMake (fetching toolkits with checked hashes, the Zig compiler, engine + HUD + tests, sensors, validators, installing plug-ins, the REAPER install/validation), then the Python scripts are deleted and the docs updated.
+  - [x] Phase 1: engine, console program, HUD and tests build with CMake (`cmake --preset windows`, `cmake --build --preset windows`, `ctest --preset windows`); GLFW, Dear ImGui, stb, Inter and Zig are fetched and checked by CMake. 18/18 tests pass.
+  - [ ] Phase 2: the sensors (VST3, CLAP, Audio Unit on macOS) and the REAPER extension; the VST3 and CLAP validators as tests.
+  - [ ] Phase 3: installing the plug-ins and the REAPER install/validation move into the C++ console program; one-command setup; delete the Python scripts; update README, guide and handoff.
 - [ ] **The big check, in 4 passes** (after the CMake move):
   1. Build: a fresh clone builds with CMake alone, every test passes, no warnings.
   2. Bugs: a correctness review of the engine, the HUD and the plug-ins.
