@@ -37,14 +37,15 @@ trace folder ──► --replay, or --demo (no DAW) ───────┘
 ```
 
 One process: the engine does all measuring and statistics; the window only draws. The HUD is a
-strip of **modules** (`engine/hud/modules.h`), across or down, picked from the right-click menu
+strip of **modules** (`engine/hud/modules/module.h`), across or down, picked from the right-click menu
 and dragged into order: **peak meter** and **CPU number** (the DAW process's CPU), **core
 heatmap** (every core, numbered, jet colours, bar lines like a DAW timeline), **busiest core**,
 **dropouts**, **memory and disk**, **CPU clock**. Machine readings come from
 `engine/src/system_monitor.h`; dropouts from the engine snapshot. The look is a plain light plug-in panel with Inter
-(`engine/hud/theme.h`). On Windows it draws like MiniMeters: Direct3D 11 into a DirectComposition
-flip swap chain with a frame-latency waitable object (`engine/hud/renderer_d3d11.cpp`). To add a
-module, write a `Module` in `engine/hud/modules.cpp` and add it to `make_modules`; rebuild with
+(`engine/hud/look/theme.h`). On Windows it draws like MiniMeters: Direct3D 11 into a DirectComposition
+flip swap chain with a frame-latency waitable object (`engine/hud/window/renderer_d3d11.cpp`, on the GPU that drives the window's screen). To add a
+module, copy `engine/hud/modules/cpu_number.cpp`, change it, and list it in `modules/module_list.*`
+(`engine/hud/README.md` has a map of the code); rebuild with
 `python tools/build_engine.py`. To try it without a DAW: `build/engine/SessionScopeHUD.exe --demo`,
 or `--replay <trace folder>`.
 

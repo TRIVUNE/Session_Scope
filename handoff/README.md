@@ -9,15 +9,15 @@ The SessionScope HUD is becoming a **MiniMeters-style strip of modules** for wat
 performance: one long window, horizontal or vertical, where the person picks which modules to show
 and drags them into the order they want.
 
-- **Modular.** Every view is a `Module` (`engine/hud/modules.h`). New views are new modules, never
+- **Modular.** Every view is a `Module` (`engine/hud/modules/module.h`). New views are new modules, never
   new fixed regions of the window. Modules adapt to the box they get (tall or wide).
 - **Smooth.** On Windows the HUD draws like MiniMeters: Direct3D 11 into a DirectComposition flip
   swap chain, one frame queued, waiting on the frame-latency waitable object
-  (`engine/hud/renderer_d3d11.cpp`). Things that move are placed by time and slide every display
-  frame; data arrives ten times a second. macOS keeps OpenGL (`renderer_gl.cpp`, untested lately).
+  (`engine/hud/window/renderer_d3d11.cpp`, on the GPU that drives the window's screen). Things that move are placed by time and slide every display
+  frame; data arrives ten times a second. macOS keeps OpenGL (`window/renderer_gl.cpp`, untested lately).
 - **Look.** A plain light plug-in panel: pale grey background, white panels with thin dark borders,
   Inter (Display Light for big numbers, Regular for text), no branding or decoration
-  (`engine/hud/theme.h`). Heatmaps use the "jet" palette: dark blue, blue, cyan, green, yellow,
+  (`engine/hud/look/theme.h`). Heatmaps use the "jet" palette: dark blue, blue, cyan, green, yellow,
   red. Red text only for values that mean trouble.
 - **Only what helps a session.** The person strips anything that isn't useful: no status lines,
   no labels for their own sake, no logos.
@@ -53,6 +53,14 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
 4. **Open question, ask before acting:** the person asked about removing Python. Python only
    builds and installs (16 scripts in `tools/` and `hosts/reaper/tools/`); nothing runs it at run
    time. Options offered: keep it, CMake, or Zig's build system. No answer yet.
+5. **Ideas from MiniMeters' second REA pass, offered but not chosen yet** (`minimeters.md`):
+   resize handles between modules (with each module's size saved), an FPS limit (VSync / 60 /
+   30: at 120 Hz the HUD costs ~14 % of a core, at 60 ~6 %), a tray icon with hide-from-taskbar,
+   window opacity, and a global hotkey to show/hide the HUD.
+
+Code map for beginners: `engine/hud/README.md`. Every file starts with what it does and where its
+ideas and system calls come from; keep it that way (the person asked for comments everywhere,
+because the team are beginners).
 
 The "Bars list" module (lateness per bar of the song) was removed at the person's request; the
 engine still computes the bar chart for `sessionscope report`.

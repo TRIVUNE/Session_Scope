@@ -1,0 +1,211 @@
+// =================================================================================================
+// hud_app.cpp - runs the HUD from start to finish (see hud_app.h)
+// =================================================================================================
+
+#include "hud_app.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <memory>
+
+#include "hud_engine.h"        // HudEngine: turns sensor data into snapshots
+#include "hud_settings.h"      // hud.ini
+#include "hud_view.h"          // the modules and the menu
+#include "simulate.h"          // the demo's generated song
+#include "system_monitor.h"    // readings from this computer
+#include "window/hud_window.h"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <timeapi.h>   // timeBeginPeriod
+#endif
+
+namespace sessionscope {
+
+namespace {
+
+// The window's size the first time (nothing saved yet), and its smallest, in design pixels: a long
+// strip, across or down. MiniMeters' defaults are similar: 1920 x 128 across, 200 x 1080 down.
+struct StripSize {
+    int width, height, min_width, min_height;
+};
+constexpr StripSize ACROSS = {1400, 150, 300, 70};
+constexpr StripSize DOWN = {280, 1100, 120, 240};
+
+// How often the engine and the SystemMonitor read new data.
+constexpr auto TICK = std::chrono::milliseconds(100);
+
+// Makes the engine for the chosen data source.
+std::unique_ptr<HudEngine> make_engine(const HudOptions &options) {
+    if (!options.replay_path.empty()) {   // a recording made earlier (a trace folder)
+        auto sensor = std::make_unique<ReplaySensor>(options.replay_path);
+        auto host = std::make_unique<ReplayHost>(*sensor);
+        return std::make_unique<HudEngine>(std::move(sensor), std::move(host), "replay", std::nullopt);
+    }
+    if (options.demo) {   // a generated song, played back: the HUD without any DAW
+        const auto folder = std::filesystem::temp_directory_path() / "sessionscope_demo" / "demo";
+        write_simulated_trace(folder, "demo");   // a short song that chokes within seconds
+        auto sensor = std::make_unique<ReplaySensor>(folder);
+        auto host = std::make_unique<ReplayHost>(*sensor);
+        return std::make_unique<HudEngine>(std::move(sensor), std::move(host), "demo",
+                                           std::string("Demo: generated data, not a measurement."));
+    }
+    // Live: the sensor plug-in in a DAW, through shared memory.
+    return std::make_unique<HudEngine>(std::make_unique<LiveSensor>(), std::make_unique<LiveHost>(), "live", std::nullopt);
+}
+
+// The demo has no DAW, so it has no DAW CPU. This made-up value follows the generated song's
+// lateness, so the meters move where the song chokes. Clearly a stand-in, like the rest of the demo.
+double demo_daw_cpu(const Snapshot &snapshot, double now) {
+    const double late = snapshot.late.p99 ? std::clamp(*snapshot.late.p99, 0.0, 1.0) : 0.0;
+    return std::clamp(0.07 + 0.03 * std::sin(now * 0.9) + 0.6 * late, 0.0, 1.0);
+}
+
+}  // namespace
+
+void show_error(const std::string &message) {
+#ifdef _WIN32
+    MessageBoxA(nullptr, message.c_str(), "SessionScope HUD Error", MB_OK | MB_ICONERROR);
+#else
+    std::cerr << message << "\n";
+#endif
+}
+
+int run_hud(const HudOptions &options) {
+#ifdef _WIN32
+    // Windows normally wakes sleeping programs in steps of 15.6 ms; this makes it 1 ms, so our
+    // sleeps end on time and no frame is missed.
+    timeBeginPeriod(1);
+#endif
+
+    // ---- 1. settings and window
+    // A screenshot run neither reads nor writes hud.ini, so its picture never depends on how
+    // someone last left the window.
+    const bool remember = !options.screenshot;
+    const std::filesystem::path settings_file = remember ? hud_settings_file() : std::filesystem::path();
+    HudSettings settings = remember ? load_hud_settings(settings_file) : HudSettings{};
+    if (options.vertical) settings.vertical = true;
+
+    HudWindowOptions window_options;
+    window_options.always_on_top = settings.on_top;
+    window_options.place = settings.window;
+    window_options.min_width = window_options.min_height = 60;   // set properly below, once the screen scale is known
+    std::string error;
+    auto window = HudWindow::create(window_options, error);
+    if (!window) {
+        show_error(error);
+        return 1;
+    }
+
+    // ---- 2. engine, computer readings, view
+    auto engine = make_engine(options);
+    // Windows sizes windows in pixels, so the layout must grow with the screen's scale (150 % etc.).
+    // macOS sizes them in points, already scaled, so there only the letters are drawn finer.
+    const double pixels_per_unit = window->framebuffer_scale();
+    const double layout_scale = window->content_scale() / pixels_per_unit;
+    HudView view(window->textures(), layout_scale, pixels_per_unit);   // loads the fonts: before the first frame
+    view.apply(settings);
+    SystemMonitor system;
+    Snapshot snapshot;
+    const bool live = options.replay_path.empty() && !options.demo;
+
+    // Window size: the default strip on the first run, and the right minimum for the direction.
+    const auto units = [layout_scale](int design) { return static_cast<int>(std::lround(design * layout_scale)); };
+    const auto strip = [](bool vertical) { return vertical ? DOWN : ACROSS; };
+    window->set_min_size(units(strip(view.vertical()).min_width), units(strip(view.vertical()).min_height));
+    if (!settings.window) {
+        WindowPlace place = window->place();
+        place.width = units(strip(view.vertical()).width);
+        place.height = units(strip(view.vertical()).height);
+        window->set_place(place);
+    }
+    // Switching horizontal <-> vertical turns the window (width and height swap), keeping its corner.
+    const auto turn_window = [&](bool vertical) {
+        WindowPlace place = window->place();
+        std::swap(place.width, place.height);
+        const StripSize size = strip(vertical);
+        window->set_min_size(units(size.min_width), units(size.min_height));
+        place.width = std::max(place.width, units(size.min_width));
+        place.height = std::max(place.height, units(size.min_height));
+        window->set_place(place);
+    };
+
+    // ---- 3. the loop
+    using clock = std::chrono::steady_clock;
+    const auto seconds = [](clock::time_point t) { return std::chrono::duration<double>(t.time_since_epoch()).count(); };
+    auto next_tick = clock::now();
+    const auto screenshot_time = clock::now() + std::chrono::milliseconds(options.wait_ms);
+    bool screenshot_taken = false;
+    // For OpenGL (macOS) only: we sleep through most of each frame ourselves, waking this long
+    // before the screen wants the next one. Without it some drivers keep a core busy while waiting
+    // (measured: 15 % of a core without, 6 % with). Windows waits on the swap chain instead.
+    const double frame_period = window->frame_period();
+    constexpr double WAKE_EARLY_S = 0.004;
+    constexpr double SHORTEST_SLEEPABLE_FRAME_S = 0.007;   // above ~140 Hz a frame is too short to sleep in
+    auto last_present = clock::now();
+
+    while (!window->should_close()) {
+        // (a) Pacing on OpenGL: sleep until just before the next screen refresh.
+        if (!window->paces_frames() && frame_period > SHORTEST_SLEEPABLE_FRAME_S) {
+            const double until_next = std::chrono::duration<double>(last_present - clock::now()).count() + frame_period;
+            window->wait_for_input(until_next - WAKE_EARLY_S);
+        }
+
+        // (b) Ten times a second: new data.
+        const auto now = clock::now();
+        if (now >= next_tick) {
+            engine->tick();
+            snapshot = engine->snapshot(seconds(now));
+            const std::optional<int> bar = snapshot.playing ? snapshot.bar : std::nullopt;
+            // A replayed recording's DAW is long gone (its process id may now belong to another program).
+            const double daw_process = live ? engine->source().host_process_id() : 0;
+            const std::optional<double> stand_in =
+                options.demo ? std::optional<double>(demo_daw_cpu(snapshot, seconds(now))) : std::nullopt;
+            system.tick(seconds(now), daw_process, bar, stand_in);
+            next_tick += TICK;
+            if (next_tick < now) next_tick = now;   // fell behind (the computer was busy): don't try to catch up in a burst
+        }
+
+        // (c) Minimised: nobody can see the HUD, so don't draw. Keep measuring (dropouts still
+        // count), and sleep until the next tick or until the window is restored.
+        if (window->is_minimized() && !options.screenshot) {
+            window->wait_for_input(std::max(0.001, std::chrono::duration<double>(next_tick - clock::now()).count()));
+            continue;
+        }
+
+        // (d) One frame.
+        window->begin_frame();   // on Windows: sleeps here until the screen can take the frame
+        const ViewRequests requests = view.draw(system, snapshot, seconds(clock::now()));
+        if (requests.keep_on_top) window->set_on_top(*requests.keep_on_top);
+        if (requests.vertical) turn_window(*requests.vertical);
+
+        const bool take_screenshot = options.screenshot && !screenshot_taken && now >= screenshot_time;
+        if (take_screenshot) window->request_screenshot(*options.screenshot);   // must be asked before end_frame()
+        window->end_frame();
+        last_present = clock::now();
+
+        if (take_screenshot) {
+            screenshot_taken = true;
+            if (!window->screenshot_saved()) {
+                show_error("Could not save the screenshot to " + options.screenshot->u8string());
+                return 1;
+            }
+            break;   // a screenshot run ends once it has its picture
+        }
+    }
+
+    // ---- 4. save the settings
+    if (remember) {
+        settings.window = window->place();
+        view.remember(settings);
+        save_hud_settings(settings_file, settings);
+    }
+    return 0;
+}
+
+}  // namespace sessionscope

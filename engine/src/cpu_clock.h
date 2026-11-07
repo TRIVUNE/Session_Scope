@@ -1,15 +1,23 @@
 #ifndef SESSIONSCOPE_CPU_CLOCK_H
 #define SESSIONSCOPE_CPU_CLOCK_H
 
-// The CPU's speed right now against its rated speed, for the HUD's "CPU clock" module. A laptop on
-// battery or a hot PC slows its cores down mid-session, and the same plug-ins then need more of
-// each block: a common hidden cause of dropouts.
+// =================================================================================================
+// cpu_clock.h - the CPU's speed now, against its rated speed
+// =================================================================================================
 //
-// Windows: the "Processor Information" performance counters Task Manager uses (% Processor
-//   Performance x Processor Frequency = current speed, which can pass the rated speed with turbo;
-//   % Performance Limit below 100 means the system is holding the CPU back). pdh.dll is loaded at
-//   run time, so nothing needs to link it.
-// macOS: no public interface gives the current speed; every reading is empty.
+// For the HUD's "CPU clock" module. A laptop on battery or a hot PC slows its cores down
+// mid-session, and the same plug-ins then need more of each audio block: a common hidden cause of
+// dropouts.
+//
+// Where it comes from:
+//   Windows: the "Processor Information" performance counters, the ones Task Manager's speed figure
+//     uses, read through PDH (Performance Data Helper, pdh.dll; documented by Microsoft under
+//     "Using the PDH Functions"):
+//       % Processor Performance x Processor Frequency / 100 = the current speed (can be above the
+//         rated speed with turbo boost)
+//       % Performance Limit below 100 = the system is holding the CPU back
+//     pdh.dll is loaded while the program runs (LoadLibrary), so nothing needs to link it.
+//   macOS: there's no public way to read the current speed; every reading is empty.
 
 #include <memory>
 #include <optional>

@@ -1,14 +1,24 @@
 #ifndef SESSIONSCOPE_CORE_CPU_H
 #define SESSIONSCOPE_CORE_CPU_H
 
-// How busy each logical core of the machine is, like Task Manager's per-core graphs. It counts
-// every process, not only the DAW: a core pinned by the audio thread shows as one full core
-// even when the DAW's overall share of the machine is small.
+// =================================================================================================
+// core_cpu.h - how busy each core of the computer is
+// =================================================================================================
 //
-// Windows: NtQuerySystemInformation(SystemProcessorPerformanceInformation), the source Task
-//   Manager uses. It covers the cores of the calling thread's processor group: all of them on
-//   machines with up to 64 logical cores.
-// macOS: host_processor_info(PROCESSOR_CPU_LOAD_INFO).
+// Like Task Manager's per-core graphs. It counts every program, not only the DAW: a core kept full
+// by the audio thread shows as one full core even when the DAW's share of the whole computer is
+// small. ("Logical cores": with hyper-threading, each physical core counts as two.)
+//
+// How: the system keeps, for every core, a running total of time spent idle and time spent busy.
+// We read the totals, and next time read them again: busy time added / all time added = how busy
+// the core was in between.
+//
+// Where it comes from:
+//   Windows: NtQuerySystemInformation(SystemProcessorPerformanceInformation), from ntdll.dll, the
+//     source Task Manager uses (documented by Microsoft under "NtQuerySystemInformation"). It
+//     covers the cores of the calling thread's processor group: all of them on machines with up to
+//     64 logical cores.
+//   macOS: host_processor_info(PROCESSOR_CPU_LOAD_INFO), Apple's Mach kernel interface.
 
 #include <cstdint>
 #include <vector>

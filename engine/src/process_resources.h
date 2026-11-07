@@ -1,12 +1,18 @@
 #ifndef SESSIONSCOPE_PROCESS_RESOURCES_H
 #define SESSIONSCOPE_PROCESS_RESOURCES_H
 
-// Memory and disk for the HUD's "Memory and disk" module: how much RAM the DAW process holds, how
-// much the machine has left, and how fast the DAW reads (sample libraries streaming from disk).
+// =================================================================================================
+// process_resources.h - the DAW's memory and disk reads, and the computer's free memory
+// =================================================================================================
 //
-// Windows: GetProcessMemoryInfo (working set), GetProcessIoCounters (bytes read: disk mostly, but
-//   also pipes and network, which a DAW rarely uses), GlobalMemoryStatusEx.
-// macOS: proc_pid_rusage (physical footprint, disk bytes read), host_statistics64.
+// For the HUD's "Memory and disk" module: how much memory (RAM) the DAW holds, how much the
+// computer has left, and how fast the DAW reads (sample libraries streaming from disk).
+//
+// Where it comes from (all documented by Microsoft / Apple under these names):
+//   Windows: GetProcessMemoryInfo (the DAW's "working set": its memory that is in RAM now),
+//     GetProcessIoCounters (bytes read: from disk mostly, but also pipes and network, which a DAW
+//     rarely uses), GlobalMemoryStatusEx (the computer's total and available memory).
+//   macOS: proc_pid_rusage (physical footprint, disk bytes read), host_statistics64 (free memory).
 
 #include <optional>
 
