@@ -58,9 +58,15 @@ Two findings that shape gate G1:
 - [x] Task Manager, phase 1: the probes' shared table (`native/sensor_core/probe_table.h`), the reader (`engine/src/probe_monitor.*`), the module (CPU and peak per track, click a track for its plug-ins), simulated probes in `--demo`. Plan: `handoff/task-manager-plan.md`.
 - [ ] **Task Manager, phase 2: the SessionScope Probe VST3 plug-in** that loads a real plug-in inside it and times it (audio, parameters, editor, state, latency passed through; a picker for the plug-in). Then Steinberg's validator, REAPER, another DAW.
 - [ ] Task Manager, phase 3: CLAP probe; track names from the host (VST3 `IInfoListener`, CLAP `track-info`); a way to wrap every plug-in on a track.
-- [ ] HUD: scrolling in the Task Manager when there are more tracks than fit; macOS versions of the tray icon, hotkey and menus (Windows-only now); the HTML prototype still shows the old design.
+- [ ] HUD: scrolling in the Task Manager when there are more tracks than fit; macOS versions of the tray icon, hotkey and menus (Windows-only now).
+- [x] Old HTML prototype (`design/hud-prototype/`) deleted: `SessionScopeHUD.exe --demo` shows the design.
 - [ ] HUD: a settings panel (hotkey), an installer (see guide.md).
-- [ ] Open question: keep Python for building, or move to CMake / Zig's build system (nothing runs Python at run time).
+- [ ] **Build with CMake instead of Python** (decided Nov 2026). Every script in `tools/` and `hosts/reaper/tools/` moves to CMake (fetching toolkits with checked hashes, the Zig compiler, engine + HUD + tests, sensors, validators, installing plug-ins, the REAPER install/validation), then the Python scripts are deleted and the docs updated.
+- [ ] **The big check, in 4 passes** (after the CMake move):
+  1. Build: a fresh clone builds with CMake alone, every test passes, no warnings.
+  2. Bugs: a correctness review of the engine, the HUD and the plug-ins.
+  3. Readability: every file says what it does and where it comes from; README, guide, handoff and this list match the code.
+  4. Live: end to end with a real DAW (sensor, HUD, probes), CPU and memory measured.
 
 ### Gate G1: choose the MVP path
 - [ ] Write the decision record: path B (bar heatmap + latency + before/after comparisons) looked likely while per-FX/per-track CPU wasn't available; the Probe (Task Manager phase 2) would make it available in any VST3 host, so revisit once it works. Decide which metric the heatmap shows in REAPER: realtime CPU (extension), the sensor proxy (after S2), or both.

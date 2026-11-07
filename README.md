@@ -23,7 +23,6 @@ they appear. Why the code looks the way it does: [decision 0005](docs/decisions/
 | `hosts/reaper/` | the optional REAPER add-on: JSFX (Sensor, Workload, Fixed Latency), ReaScripts (Record trace, Inventory, Build fixtures), the REAPER extension for realtime CPU, and their tests |
 | `tools/` | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners |
 | `docs/` | decisions, research records per spike, metric definitions |
-| `design/hud-prototype/` | the HUD interaction prototype (illustrative data only) |
 | `handoff/` | for the next AI agent: the HUD's direction, what's next, how to work here |
 
 ## Quick start: sensor + HUD window

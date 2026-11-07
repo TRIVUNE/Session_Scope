@@ -45,11 +45,10 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
    probes' shared table, the reader and the module work, shown in `--demo` by simulated probes.
    Next is the SessionScope Probe VST3 plug-in that loads a real plug-in and times it; then the
    CLAP probe and track names from the host (phase 3). The full to-do list is in `STATUS.md`.
-2. **The HTML prototype** (`design/hud-prototype/index.html`) still shows the old black
-   spectrogram design. Bring it in line with the strip, or delete it if the person agrees.
-3. **Open question, ask before acting:** the person asked about removing Python. Python only
-   builds and installs (16 scripts in `tools/` and `hosts/reaper/tools/`); nothing runs it at run
-   time. Options offered: keep it, CMake, or Zig's build system. No answer yet.
+2. **Build with CMake instead of Python** (the person's decision, Nov 2026): every script in
+   `tools/` and `hosts/reaper/tools/` moves to CMake, then Python is removed. In progress; see
+   `STATUS.md`.
+3. **The big check, 4 passes** (the person's request): see `STATUS.md`.
 4. **macOS:** the tray icon, hotkey, taskbar choice and native menus are Windows-only so far
    (`window/desktop.cpp`, `window/menu.cpp` have empty stand-ins); nothing on macOS was built or
    run in this round.

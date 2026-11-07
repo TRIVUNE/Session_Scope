@@ -144,9 +144,8 @@ Trying the HUD is now two steps (see README): `python tools/setup.py` once, then
       Make `install_vst3.py` install the bundle, then test in another host (e.g. Bitwig, Cubase demo).
 - [x] **HUD comfort**: remembers window size and position (`hud.ini`), a compact mode (meter
       only), click a bar to see its blocks pass by pass.
-- [ ] **HUD next**: a settings panel (meter window length, quantile), and the prototype's
-      remaining pages (track list, search) once there is per-track data to show.
-      Design reference: `design/hud-prototype/index.html`.
+- [ ] **HUD next**: a settings panel (hotkey, meter window length). The old HTML prototype was
+      deleted (Nov 2026); `SessionScopeHUD.exe --demo` shows the design.
 - [ ] **HUD packaging**: the HUD and the console program are single native executables; for P4,
       ship them with the sensor in one installer.
 - [ ] **Commenting pass**: the older files still need the line-by-line comments:
