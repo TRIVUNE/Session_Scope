@@ -1,6 +1,6 @@
 # SessionScope
 
-Performance diagnostics for digital audio workstations, by TRIVUNE: find where in the song a
+Performance diagnostics for digital audio workstations, by TRIVUNE: find where in the song a s
 session chokes, understand why, test a fix, and see whether it helped.
 
 It works with any DAW that loads VST3, CLAP or (on macOS) Audio Unit plug-ins. A small sensor
@@ -16,14 +16,14 @@ they appear. Why the code looks the way it does: [decision 0005](docs/decisions/
 
 ## What is here
 
-| Path | What it is |
-| --- | --- |
-| `native/` | the sensor: one shared core (`sensor_core/`) wrapped as `SessionScope.vst3`, `SessionScope.clap` and, on macOS, `SessionScope.component` (Audio Unit). A pass-through effect for the master track that publishes one record per audio block into shared memory |
-| `engine/` | C++: the trace reader, statistics, reports and checks (`src/`), the console program `sessionscope` (`tools/`), the HUD window (`hud/`, GLFW + Dear ImGui, drawn with Direct3D 11 on Windows and OpenGL on macOS) and the tests |
-| `hosts/reaper/` | the optional REAPER add-on: JSFX (Sensor, Workload, Fixed Latency), ReaScripts (Record trace, Inventory, Build fixtures), the REAPER extension for realtime CPU, and their tests |
-| `tools/` | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners |
-| `docs/` | decisions, research records per spike, metric definitions |
-| `handoff/` | for the next AI agent: the HUD's direction, what's next, how to work here |
+| Path            | What it is                                                                                                                                                                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `native/`       | the sensor: one shared core (`sensor_core/`) wrapped as `SessionScope.vst3`, `SessionScope.clap` and, on macOS, `SessionScope.component` (Audio Unit). A pass-through effect for the master track that publishes one record per audio block into shared memory |
+| `engine/`       | C++: the trace reader, statistics, reports and checks (`src/`), the console program `sessionscope` (`tools/`), the HUD window (`hud/`, GLFW + Dear ImGui, drawn with Direct3D 11 on Windows and OpenGL on macOS) and the tests                                 |
+| `hosts/reaper/` | the optional REAPER add-on: JSFX (Sensor, Workload, Fixed Latency), ReaScripts (Record trace, Inventory, Build fixtures), the REAPER extension for realtime CPU, and their tests                                                                               |
+| `tools/`        | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners                                                                                              |
+| `docs/`         | decisions, research records per spike, metric definitions                                                                                                                                                                                                      |
+| `handoff/`      | for the next AI agent: the HUD's direction, what's next, how to work here                                                                                                                                                                                      |
 
 ## Quick start: sensor + HUD window
 
@@ -41,15 +41,15 @@ In your DAW: put **SessionScope Sensor** (TRIVUNE) on the **master track** and p
 DAW doesn't list it, rescan its plug-ins. Until the sensor plays, the HUD shows what's missing.
 The HUD is one long strip of modules, as in MiniMeters:
 
-| Module | Shows |
-| --- | --- |
-| Peak meter | the DAW process's CPU, with a peak mark held for two seconds |
-| CPU number | the DAW's share of the whole machine, averaged over the last second |
-| Core heatmap | every core of the machine, numbered on the left (dark blue idle, through cyan, green and yellow, to red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline; hover for a core's exact load |
-| Busiest core | the single most loaded core and which one it is: a pinned audio thread crackles long before the overall CPU looks high |
-| Dropouts | blocks that ran late enough to drop out (count, and the bar of the last one), and the headroom left |
-| Memory and disk | the DAW's RAM, the machine's free RAM, and how fast the DAW reads (sample streaming) |
-| CPU clock | the CPU's speed against its rated speed, and whether the system caps it (heat, battery, power plan) |
+| Module          | Shows                                                                                                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Peak meter      | the DAW process's CPU, with a peak mark held for two seconds                                                                                                                                                                                        |
+| CPU number      | the DAW's share of the whole machine, averaged over the last second                                                                                                                                                                                 |
+| Core heatmap    | every core of the machine, numbered on the left (dark blue idle, through cyan, green and yellow, to red full), the newest second at the right; bar starts are lines with the bar number above, like a DAW's timeline; hover for a core's exact load |
+| Busiest core    | the single most loaded core and which one it is: a pinned audio thread crackles long before the overall CPU looks high                                                                                                                              |
+| Dropouts        | blocks that ran late enough to drop out (count, and the bar of the last one), and the headroom left                                                                                                                                                 |
+| Memory and disk | the DAW's RAM, the machine's free RAM, and how fast the DAW reads (sample streaming)                                                                                                                                                                |
+| CPU clock       | the CPU's speed against its rated speed, and whether the system caps it (heat, battery, power plan)                                                                                                                                                 |
 
 Using it:
 
@@ -73,11 +73,11 @@ The HUD remembers its place, size and these choices in `hud.ini` in your Session
 folder (`%APPDATA%\SessionScope` on Windows, `~/Library/Application Support/SessionScope` on
 macOS); delete the file to start fresh.
 
-| | Windows | macOS |
-| --- | --- | --- |
-| Formats | VST3, CLAP | VST3, CLAP, Audio Unit |
-| Per-user plug-in folders | `%LOCALAPPDATA%\Programs\Common\VST3`, `...\CLAP` | `~/Library/Audio/Plug-Ins/VST3`, `CLAP`, `Components` |
-| Shared folders (need admin) | `%CommonProgramFiles%\VST3`, `...\CLAP` | `/Library/Audio/Plug-Ins/...` |
+|                             | Windows                                           | macOS                                                 |
+| --------------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| Formats                     | VST3, CLAP                                        | VST3, CLAP, Audio Unit                                |
+| Per-user plug-in folders    | `%LOCALAPPDATA%\Programs\Common\VST3`, `...\CLAP` | `~/Library/Audio/Plug-Ins/VST3`, `CLAP`, `Components` |
+| Shared folders (need admin) | `%CommonProgramFiles%\VST3`, `...\CLAP`           | `/Library/Audio/Plug-Ins/...`                         |
 
 `setup.py` installs into the per-user folders and tries the shared ones. Some DAWs only scan the
 shared folders; then run `python tools/install_plugins.py` from an administrator terminal (or with
@@ -105,8 +105,8 @@ python hosts/reaper/tools/reaper_validate.py     # a real REAPER, isolated setti
 ```
 
 On Windows, `setup.py` also installs the REAPER extension when REAPER is present. Traces then
-include `host.csv`, and reports add a "Realtime CPU" heatmap. In REAPER: *Actions > Show action
-list > New action > Load ReaScript*, and load the three `SessionScope - ...` scripts from
+include `host.csv`, and reports add a "Realtime CPU" heatmap. In REAPER: _Actions > Show action
+list > New action > Load ReaScript_, and load the three `SessionScope - ...` scripts from
 `Scripts/SessionScope`.
 
 1. Run **SessionScope - Build fixtures**. It writes the test projects to
