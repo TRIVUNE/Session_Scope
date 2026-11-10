@@ -106,7 +106,7 @@ set(sdk_files
     public.sdk/source/vst/hosting/hostclasses.cpp public.sdk/source/vst/hosting/module.cpp
     public.sdk/source/vst/hosting/module_win32.cpp public.sdk/source/vst/hosting/parameterchanges.cpp
     public.sdk/source/vst/hosting/pluginterfacesupport.cpp public.sdk/source/vst/hosting/processdata.cpp
-    public.sdk/source/vst/hosting/plugprovider.cpp public.sdk/source/main/moduleinit.cpp
+    public.sdk/source/vst/hosting/plugprovider.cpp
     public.sdk/source/vst/moduleinfo/moduleinfoparser.cpp public.sdk/source/common/commoniids.cpp
     public.sdk/source/common/commonstringconvert.cpp public.sdk/source/common/memorystream.cpp
     public.sdk/source/common/openurl.cpp public.sdk/source/common/readfile.cpp
@@ -125,15 +125,54 @@ foreach(group bus general noteexpression processing state unit)
   list(APPEND vst3_validator_files ${group_files})
 endforeach()
 list(TRANSFORM sdk_files PREPEND "${VST3_SDK}/")
-add_executable(vst3_validator ${vst3_validator_files} ${sdk_files})
-target_include_directories(vst3_validator SYSTEM PRIVATE "${VST3_SDK}" "${VST3_SDK}/public.sdk"
+add_library(vst3_host_sdk OBJECT ${sdk_files})
+target_include_directories(vst3_host_sdk SYSTEM PUBLIC "${VST3_SDK}" "${VST3_SDK}/public.sdk"
                            "${VST3_SDK}/public.sdk/source/vst/hosting" "${VST3_SDK}/public.sdk/source/vst/testsuite")
-target_compile_definitions(vst3_validator PRIVATE SMTG_OS_WINDOWS=1 COM_COMPATIBLE=1 _CRT_SECURE_NO_WARNINGS RELEASE=1 NDEBUG)
+target_compile_definitions(vst3_host_sdk PUBLIC SMTG_OS_WINDOWS=1 COM_COMPATIBLE=1 _CRT_SECURE_NO_WARNINGS RELEASE=1 NDEBUG)
+target_compile_options(vst3_host_sdk PRIVATE -w)
+target_link_libraries(vst3_host_sdk PUBLIC ole32 uuid shell32 shlwapi advapi32)
+
+add_executable(vst3_validator ${vst3_validator_files} "${VST3_SDK}/public.sdk/source/main/moduleinit.cpp")
+target_link_libraries(vst3_validator PRIVATE vst3_host_sdk -Wl,--subsystem=console)
 target_compile_options(vst3_validator PRIVATE -w)   # Steinberg's code: not ours to fix
-target_link_libraries(vst3_validator PRIVATE ole32 uuid shell32 shlwapi advapi32 -Wl,--subsystem=console)
 set_target_properties(vst3_validator PROPERTIES OUTPUT_NAME validator RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
 add_test(NAME vst3_validator COMMAND vst3_validator "${NATIVE_OUT}/SessionScope.vst3")
 set_tests_properties(vst3_validator PROPERTIES LABELS plugins PASS_REGULAR_EXPRESSION "Result: [0-9]+ tests passed, 0 tests failed")
+
+# ---- the VST3 Probe (effect wrapper with a Windows editor)
+set(probe_plugin_files ${vst3_plugin_files})
+list(REMOVE_ITEM probe_plugin_files ${sdk_files})
+add_library(vst3_probe SHARED vst3_probe/sessionscope_probe.cpp vst3_probe/hosted_vst3.cpp
+                             ${probe_plugin_files} "${validator_dir}/usediids.cpp")
+target_link_libraries(vst3_probe PRIVATE vst3_host_sdk)
+target_compile_options(vst3_probe PRIVATE ${PLUGIN_WARNINGS})
+set_target_properties(vst3_probe PROPERTIES PREFIX "" OUTPUT_NAME "SessionScopeProbe.vst3" SUFFIX ".dll"
+                                            RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
+set(probe_bundle "${NATIVE_OUT}/SessionScopeProbe.vst3")
+add_custom_command(TARGET vst3_probe POST_BUILD
+                   COMMAND "${CMAKE_COMMAND}" -E make_directory "${probe_bundle}/Contents/x86_64-win"
+                   COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:vst3_probe>"
+                           "${probe_bundle}/Contents/x86_64-win/SessionScopeProbe.vst3")
+add_test(NAME vst3_probe_validator COMMAND vst3_validator "${probe_bundle}")
+set_tests_properties(vst3_probe_validator PROPERTIES LABELS plugins
+                     PASS_REGULAR_EXPRESSION "Result: [0-9]+ tests passed, 0 tests failed")
+
+# ---- checks: load and time the real Sensor through the Probe hosting core
+add_executable(test_hosted_vst3 vst3_probe/hosted_vst3.cpp vst3_probe/test_hosted_vst3.cpp
+                              "${validator_dir}/usediids.cpp")
+target_link_libraries(test_hosted_vst3 PRIVATE vst3_host_sdk -Wl,--subsystem=console)
+target_compile_options(test_hosted_vst3 PRIVATE ${PLUGIN_WARNINGS})
+add_dependencies(test_hosted_vst3 vst3_sensor)
+add_test(NAME vst3_probe_host COMMAND test_hosted_vst3 "${NATIVE_OUT}/SessionScope.vst3")
+set_tests_properties(vst3_probe_host PROPERTIES LABELS plugins)
+
+add_executable(test_probe_bundle vst3_probe/hosted_vst3.cpp vst3_probe/test_probe_bundle.cpp
+                                 "${validator_dir}/usediids.cpp")
+target_link_libraries(test_probe_bundle PRIVATE vst3_host_sdk -Wl,--subsystem=console)
+target_compile_options(test_probe_bundle PRIVATE ${PLUGIN_WARNINGS})
+add_dependencies(test_probe_bundle vst3_probe vst3_sensor)
+add_test(NAME vst3_probe_bundle COMMAND test_probe_bundle "${probe_bundle}" "${NATIVE_OUT}/SessionScope.vst3")
+set_tests_properties(vst3_probe_bundle PROPERTIES LABELS plugins)
 
 # ---- checks: clap-validator (a downloaded program) and our small CLAP host
 fetch_from_zip(clap-validator
