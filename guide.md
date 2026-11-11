@@ -1,6 +1,6 @@
 # SessionScope: working guide
 
-Last updated 6 November 2026. This is the plan in one place: what we are building, where it
+Last updated 11 November 2026. This is the plan in one place: what we are building, where it
 stands, and what to do next, in order. [STATUS.md](STATUS.md) keeps the detailed checklist and
 results per spike; [README.md](README.md) explains how to build and run things.
 
@@ -41,7 +41,8 @@ One process: the engine does all measuring and statistics; the window only draws
 strip of **modules** (`engine/hud/modules/module.h`), across or down, picked from the right-click menu
 and dragged into order: **peak meter** and **CPU number** (the DAW process's CPU), **core
 heatmap** (every core, numbered, jet colours, bar lines like a DAW timeline), **busiest core**,
-**dropouts**, **memory and disk**, **CPU clock**. Machine readings come from
+**dropouts**, **memory and disk**, **CPU clock**, and the **Task Manager** (CPU per track and
+plug-in, from the SessionScope Probes: `engine/src/probe_monitor.h`). Machine readings come from
 `engine/src/system_monitor.h`; dropouts from the engine snapshot. The look is a plain light plug-in panel with Inter
 (`engine/hud/look/theme.h`). On Windows it draws like MiniMeters: Direct3D 11 into a DirectComposition
 flip swap chain with a frame-latency waitable object (`engine/hud/window/renderer_d3d11.cpp`, on the GPU that drives the window's screen). To add a
@@ -139,10 +140,13 @@ Trying the HUD is now two steps (see README): `cmake --workflow --preset windows
       `get_config_var_string` / SWS `SNM_GetIntConfigVar` for the size; whether the extension can
       infer the margin from the gap between REAPER's audio hook and the sensor's timestamps
       (the sensor runs ahead of the device by up to the render-ahead size). Ask on the REAPER forum.
-- [ ] **Run Steinberg's `validator`** on `SessionScope.vst3` (it is built with the VST3 SDK in
-      `.toolchain/vst3sdk`; needs a CMake build of the SDK's `validator` target) and fix anything it reports.
-- [ ] **VST3 bundle format**: hosts other than REAPER expect `SessionScope.vst3/Contents/x86_64-win/`.
-      Done: `sessionscope install` installs the bundle. Still to do: test in another host.
+- [x] **Steinberg's `validator`** on `SessionScope.vst3` and on the Probe: 47/47 each
+      (`ctest --preset windows-plugins`).
+- [x] **VST3 bundle format**: `sessionscope install` installs the bundle
+      (`SessionScope.vst3/Contents/x86_64-win/`). Still to do: test in another host.
+- [x] **CPU per track and per plug-in** (the Task Manager): the SessionScope Probes, checked in
+      REAPER with third-party plug-ins on 11 Nov 2026. What was built and measured:
+      `handoff/task-manager-plan.md`. Still to do by hand: Ableton Live, Cubase, Bitwig.
 - [x] **HUD comfort**: remembers window size and position (`hud.ini`), a compact mode (meter
       only), click a bar to see its blocks pass by pass.
 - [ ] **HUD next**: a settings panel (hotkey, meter window length). The old HTML prototype was
@@ -167,11 +171,11 @@ looks smooth: it draws every display frame on the GPU. What to take from that, i
       snapshot each frame.
 
 ### HUD layout today
-Meters on top (MiniMeters style: lateness spectrogram + profile, bar map strip, waveform, late
-p99 readout) and the **Task Manager view** underneath: every bar of the song as a row, grouped
-"Playing now / Hot bars / All bars", totals over the column names, amber-tinted cells, click a
-column to sort, "list" folds it away. Rows are bars, not tracks: REAPER doesn't give per-track
-CPU (finding D); per-track rows need path A or another host.
+A strip of modules (see "The HUD, in one picture" above and the README). The **Task Manager**
+module lists tracks and their plug-ins with the CPU each uses, from the SessionScope Probes:
+REAPER itself doesn't give per-track CPU (finding D), so the Probe measures each plug-in from
+the outside. (An earlier layout had a "Task Manager view" whose rows were bars of the song; it
+was removed at the person's request.)
 
 ### Tools installed on 30 Oct
 - Node.js updated 24.18.0 → 24.22.1 (winget), needed by REA.
@@ -180,8 +184,9 @@ CPU (finding D); per-track rows need path A or another host.
 
 ### 3. Gate G1: choose the MVP path
 - [ ] Write `docs/decisions/0006-mvp-path.md` (template: `0001-record-template.md`). Path B
-      (bar heatmap + latency + before/after comparisons) looks likely, since per-FX/per-track CPU
-      isn't available. Decide what the REAPER heatmap shows: realtime CPU (extension), the sensor's
+      (bar heatmap + latency + before/after comparisons) looked likely while per-FX/per-track CPU
+      wasn't available; the Probes now make it available in VST3 and CLAP hosts, so path A is
+      open again. Decide what the REAPER heatmap shows: realtime CPU (extension), the sensor's
       lateness proxy (after S2), or both. S2's result decides this, so do S2 first.
 
 ### 4. After G1
