@@ -86,6 +86,15 @@ public:
     // having no tail and stop calling it once the input goes quiet.
     uint32 PLUGIN_API getTailSamples() SMTG_OVERRIDE { return kInfiniteTail; }
 
+    // Saving and loading: the sensor has no settings, so there is nothing to write or read. It
+    // still answers "done" for both halves of a VST3's state (the audio half and the window
+    // half): the base class answers "not implemented", which Ableton Live writes into its log as
+    // an error every time it saves ("couldn't get processor state of SessionScope Sensor").
+    tresult PLUGIN_API getState(IBStream *) SMTG_OVERRIDE { return kResultOk; }
+    tresult PLUGIN_API setState(IBStream *) SMTG_OVERRIDE { return kResultOk; }
+    tresult PLUGIN_API getEditorState(IBStream *) SMTG_OVERRIDE { return kResultOk; }
+    tresult PLUGIN_API setEditorState(IBStream *) SMTG_OVERRIDE { return kResultOk; }
+
     tresult PLUGIN_API setupProcessing(ProcessSetup &setup) SMTG_OVERRIDE {
         sample_rate_ = setup.sampleRate;
         return SingleComponentEffect::setupProcessing(setup);

@@ -52,10 +52,10 @@ void reaper_uninstall(const std::filesystem::path &repo, const std::filesystem::
 // keeping every other line REAPER wrote. Makes the file if it is missing.
 void write_reaper_audio_config(const std::filesystem::path &work, int mode);
 
-// Makes the isolated REAPER look for VST plug-ins in `folder` first (build/native: the plug-ins
-// just built), so the validation tests the fresh build without installing it. REAPER still adds
-// the system's standard VST3 folders itself and scans them once: that is why the first run on a
-// computer takes minutes.
+// Makes the isolated REAPER look for VST plug-ins in `folder` only (build/native: the plug-ins
+// just built), so the validation tests the fresh build without installing it, and third-party
+// plug-ins stay out of it. To try other plug-ins in the isolated REAPER, add their folders to
+// vstpath64 in build/reaper-validate/reaper.ini by hand; the next validation sets it back.
 void write_reaper_plugin_folder(const std::filesystem::path &work, const std::filesystem::path &folder);
 
 // The validation's findings as readable text, a few lines per step, from result.json.

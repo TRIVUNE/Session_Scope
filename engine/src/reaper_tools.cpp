@@ -430,9 +430,11 @@ void write_reaper_audio_config(const fs::path &work, int mode) {
 }
 
 void write_reaper_plugin_folder(const fs::path &work, const fs::path &folder) {
-    // vstpath64: the folders REAPER scans for VST plug-ins, separated by ";". We write ours;
-    // REAPER adds the system's standard VST3 folders after it again when it starts, and when one
-    // plug-in is in two folders it uses the first, so the fresh build wins over an installed copy.
+    // vstpath64: the folders REAPER looks in for VST plug-ins, separated by ";". We write only
+    // ours, so the validation uses the plug-ins just built and no others. (A brand-new settings
+    // folder is different: there REAPER fills in the system's standard folders itself and scans
+    // everything once, which is why the first run takes minutes. REAPER's own plug-ins, ReaEQ and
+    // the like, are found whatever this says.)
     set_reaper_ini(work, "reaper", {{"vstpath64", shown(folder)}});
 }
 

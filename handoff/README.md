@@ -57,8 +57,10 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
    nothing on macOS was built or run in the last two rounds.
 
 Done on 11 Nov 2026: the CMake move's phase 3 (the person said to go ahead; no Python is left:
-`cmake-move.md`), Task Manager phases 2 and 3, scrolling in the Task Manager, and big-check
-passes 1 to 3 (what they found is in `STATUS.md`).
+`cmake-move.md`), Task Manager phases 2 and 3, scrolling in the Task Manager, big-check
+passes 1 to 3 and the part of pass 4 that needs no person (what they found is in `STATUS.md`).
+The person's instruction for that round was "finish this project", narrowed to "everything
+which you can test on this machine: we have Ableton, Cubase and REAPER".
 
 Done from MiniMeters' second REA pass (`minimeters.md`), all chosen by the person: resize handles
 between modules, pop-out windows, frame-rate limit, window opacity, tray icon, hide from taskbar,
@@ -96,6 +98,14 @@ engine still computes the bar chart for `sessionscope report`.
   `build/engine/SessionScopeHUD.exe --demo --screenshot out.png --wait 9000` (add `--vertical`
   for the column layout).
 - The demo has no DAW, so its DAW CPU is a stand-in; say so wherever it matters.
+- **Testing inside a real REAPER without touching the person's own:** start it on the
+  validation's settings folder with a Lua script to run:
+  `reaper.exe -cfgfile build\reaper-validate\reaper.ini -newinst -nosplash -new script.lua`.
+  The script can build a project, play it, call `sessionscope probes` through
+  `reaper.ExecProcess`, write what it finds to a file and quit (action 40004). A window's
+  controls can be pressed from outside by sending them messages (`BM_CLICK`, `LB_SELECTSTRING`),
+  which is how the Probe's picker was tested. On the dummy audio device the lateness numbers
+  mean nothing (it does not keep real time).
 - **Never touch the person's own `hud.ini`** (`%APPDATA%\SessionScope`) in tests: pass
   `--settings <scratch file>`; screenshot runs don't read or write settings at all. Their settings
   were lost once this way.

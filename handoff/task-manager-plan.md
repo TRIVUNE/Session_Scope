@@ -102,8 +102,14 @@ Checked (11 Nov 2026, isolated REAPER, each by a script; nothing was clicked by 
 
 Still to check, because it needs a person in the DAW:
 
-1. **Cubase and Ableton Live** (both on the person's computer): does the VST3 Probe load, does
-   the hosted plug-in's window open, is it timed, does Cubase send the track name. Use the log.
+1. **Ableton Live 12** (installed on the person's computer): does the VST3 Probe load, does the
+   hosted plug-in's window open, is it timed. Live scans only the shared folder
+   (`C:\Program Files\Common Files\VST3`, seen in its `PluginScanner.txt`), so the plug-ins
+   must be installed there first: `sessionscope install` from an administrator terminal. On
+   11 Nov 2026 that folder still held a Sensor from 30 Oct (0.2.0) and no Probe. Live does not
+   tell plug-ins their track (no `IInfoListener`, to our knowledge), so expect "Unknown track".
+   **Cubase** was not found on this computer (no program, no settings folder); when there is
+   one: the same checks, and whether it sends the track name. Use the log.
 2. **Bitwig** or another CLAP host for the CLAP Probe.
 3. Looking at it: the picker and a hosted plug-in's window on screen, by eye.
 4. macOS: neither Probe is built there yet (the picker is Win32; CLAP bundles need their own
