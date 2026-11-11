@@ -3,37 +3,40 @@
 | Folder | What | Status |
 | --- | --- | --- |
 | `../hosts/reaper/extension/` | `reaper_sessionscope.dll` (REAPER only): times REAPER's own processing of each audio block through the documented audio hook, and writes `host.csv` into the trace the recorder script is writing, and publishes every block live into the shared-memory ring `SessionScope_host_v1` for the HUD ([decision 0003](../docs/decisions/0003-native-next.md)) | **built and validated** in REAPER 7.77 |
-| `vst3_sensor/` | `SessionScope.vst3`: stereo pass-through effect for the master track; publishes one record per block into the shared-memory ring `SessionScope_v2` (layout 2: adds the host's bar start) that the HUD window reads | **built and verified** in REAPER 7.77 (needs the VST3 SDK: `python tools/get_vst3sdk.py`) |
-| `clap_sensor/` | `SessionScope.clap`: the same sensor for CLAP hosts; `test_clap_sensor.cpp` is a small host that checks the records it writes | **built and validated** with `clap-validator` 0.4.1 (needs the CLAP headers: `python tools/get_clap.py`) |
+| `vst3_sensor/` | `SessionScope.vst3`: stereo pass-through effect for the master track; publishes one record per block into the shared-memory ring `SessionScope_v2` (layout 2: adds the host's bar start) that the HUD window reads | **built and verified** in REAPER 7.77 |
+| `clap_sensor/` | `SessionScope.clap`: the same sensor for CLAP hosts; `test_clap_sensor.cpp` is a small host that checks the records it writes | **built and validated** with `clap-validator` 0.4.1 |
+| `vst3_probe/` | `SessionScopeProbe.vst3` (Windows): loads one VST3 effect inside itself, passes everything through and times every block into the shared table `SessionScope_probes_v1` (`sensor_core/probe_table.h`) for the HUD's Task Manager. `hosted_vst3.*` loads and times; `sessionscope_probe.cpp` is the plug-in and its picker window | **built and checked** in REAPER 7.83 with third-party effects; Steinberg's validator passes (47/47); two test hosts |
+| `clap_probe/` | `SessionScopeProbe.clap` (Windows): shows the DAW a timed twin of every installed CLAP plug-in, writing into the same table | **built**; `clap-validator` and a test host pass (twinning our own CLAP sensor); not yet tried in a DAW |
 | `../hosts/reaper/third_party/reaper-sdk/` | `reaper_plugin.h` from github.com/justinfrankel/reaper-sdk at `b2ca1ec` (zlib licence, notice kept in the file) | |
 
 The sensor exists as VST3 and as CLAP; both are thin wrappers around `sensor_core/sensor_ring.h`,
 so they write the same records.
 
-## Build (Windows)
+## Build
 
-With the pinned Zig toolchain (a self-contained clang; nothing is installed system-wide):
-
-```sh
-python tools/get_zig.py        # once: downloads Zig 0.16.0 into .toolchain/ and checks its SHA-256
-python tools/build_native.py   # builds build/native/reaper_sessionscope.dll
-```
-
-Or with Visual Studio Build Tools and CMake:
+Everything here is built by CMake with the pinned Zig toolchain (a self-contained clang, fetched
+into `.toolchain/` and checked; nothing is installed system-wide). The VST3 SDK and the CLAP
+headers are fetched the same way. From the repository folder:
 
 ```sh
-cmake -S native -B build/native -A x64
-cmake --build build/native --config Release
+cmake --preset windows           # once ("mac" on a Mac)
+cmake --build --preset windows   # builds into build/native/
+ctest --preset windows-plugins   # the validators and test hosts (close your DAW first)
 ```
 
-The DLL exports only `ReaperPluginEntry` and needs nothing beyond Windows 10 or 11 (C++ runtime
-linked in, C runtime = the Universal CRT that ships with Windows). It uses only REAPER's plain C
-structures, so a MinGW-ABI build works; the SDK's C++ interfaces are not used.
+`native/CMakeLists.txt` describes every target; `native/mac.cmake` has the macOS bundles and the
+Audio Unit (written, not yet run on a Mac).
+
+The extension DLL exports only `ReaperPluginEntry` and needs nothing beyond Windows 10 or 11 (C++
+runtime linked in, C runtime = the Universal CRT that ships with Windows). It uses only REAPER's
+plain C structures, so a MinGW-ABI build works; the SDK's C++ interfaces are not used.
 
 ## Install
 
-Copy `build/native/reaper_sessionscope.dll` into `<REAPER resource path>/UserPlugins/` and restart
-REAPER. `python tools/setup.py` installs it when REAPER is present; `python hosts/reaper/tools/reaper_validate.py` does this automatically for its isolated REAPER only.
+`build/engine/sessionscope install` copies the plug-ins into the per-user and shared plug-in
+folders and, when REAPER is present, `reaper_sessionscope.dll` into
+`<REAPER resource path>/UserPlugins/` (restart REAPER afterwards). `sessionscope reaper validate`
+does the same for its isolated REAPER only. The code and the folders: `engine/src/install.h`.
 
 ## What has been checked (REAPER 7.77, dummy audio 48 kHz / 256)
 

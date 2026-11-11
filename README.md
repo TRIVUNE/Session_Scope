@@ -18,21 +18,26 @@ they appear. Why the code looks the way it does: [decision 0005](docs/decisions/
 
 | Path            | What it is                                                                                                                                                                                                                                                     |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `native/`       | the sensor: one shared core (`sensor_core/`) wrapped as `SessionScope.vst3`, `SessionScope.clap` and, on macOS, `SessionScope.component` (Audio Unit). A pass-through effect for the master track that publishes one record per audio block into shared memory |
+| `native/`       | the sensor and the Probes. The sensor: one shared core (`sensor_core/`) wrapped as `SessionScope.vst3`, `SessionScope.clap` and, on macOS, `SessionScope.component` (Audio Unit). A pass-through effect for the master track that publishes one record per audio block into shared memory |
 | `engine/`       | C++: the trace reader, statistics, reports and checks (`src/`), the console program `sessionscope` (`tools/`), the HUD window (`hud/`, GLFW + Dear ImGui, drawn with Direct3D 11 on Windows and OpenGL on macOS) and the tests                                 |
 | `hosts/reaper/` | the optional REAPER add-on: JSFX (Sensor, Workload, Fixed Latency), ReaScripts (Record trace, Inventory, Build fixtures), the REAPER extension for realtime CPU, and their tests                                                                               |
-| `tools/`        | build, install and check scripts (Python, only for building): `setup.py`, `build_native.py`, `build_engine.py`, `install_plugins.py`, and the validators' runners                                                                                              |
+| `cmake/`        | the build's helpers: the pinned Zig compiler, the pinned downloads (GLFW, Dear ImGui, the VST3 SDK, CLAP...), the HUD's fonts. The build itself is `CMakeLists.txt` here and in `engine/` and `native/`                                                     |
 | `docs/`         | decisions, research records per spike, metric definitions                                                                                                                                                                                                      |
 | `handoff/`      | for the next AI agent: the HUD's direction, what's next, how to work here                                                                                                                                                                                      |
 
 ## Quick start: sensor + HUD window
 
-Needs Python 3.10+ and git, for the build only. On macOS also the Xcode command line tools
-(`xcode-select --install`). From the repository folder:
+Needs [CMake](https://cmake.org) 3.25+, [Ninja](https://ninja-build.org) and git, for the build
+only (on Windows: `scoop install cmake ninja`, or `winget install Kitware.CMake Ninja-build.Ninja`).
+On macOS also the Xcode command line tools (`xcode-select --install`). From the repository folder:
 
 ```sh
-python tools/setup.py   # once, and after pulling changes: builds and installs everything
+cmake --workflow --preset windows   # once, and after pulling changes ("mac" on a Mac)
 ```
+
+That one command sets up the build (fetching the pinned compiler and toolkits the first time),
+builds everything, runs the tests and installs the plug-ins. Close your DAW first: a plug-in the
+DAW has open can't be replaced.
 
 Then open the HUD: `build/engine/SessionScopeHUD.exe` on Windows, `build/engine/SessionScopeHUD`
 on macOS.
@@ -79,9 +84,39 @@ macOS); delete the file to start fresh.
 | Per-user plug-in folders    | `%LOCALAPPDATA%\Programs\Common\VST3`, `...\CLAP` | `~/Library/Audio/Plug-Ins/VST3`, `CLAP`, `Components` |
 | Shared folders (need admin) | `%CommonProgramFiles%\VST3`, `...\CLAP`           | `/Library/Audio/Plug-Ins/...`                         |
 
-`setup.py` installs into the per-user folders and tries the shared ones. Some DAWs only scan the
-shared folders; then run `python tools/install_plugins.py` from an administrator terminal (or with
-`sudo` on macOS). Pro Tools (AAX) is not supported: it needs an Avid developer account.
+The setup installs into the per-user folders and tries the shared ones. Some DAWs only scan the
+shared folders; then run `build/engine/sessionscope install` from an administrator terminal (or
+with `sudo` on macOS). `sessionscope install --uninstall` removes everything again. Pro Tools
+(AAX) is not supported: it needs an Avid developer account.
+
+## CPU per track and per plug-in: the Probes (Windows)
+
+A plug-in can't see what other plug-ins cost, so SessionScope measures a plug-in from the outside,
+with a **Probe**: a plug-in that holds the real plug-in, passes everything through (audio,
+parameters, presets, the plug-in's own window, latency) and times every block. The HUD's **Task
+Manager** module then lists each track with its probed plug-ins: the share of the block's time
+each one uses, and its worst block in the last second. Click a track to see its plug-ins, turn the
+mouse wheel to scroll. `sessionscope probes` prints the same list in a terminal.
+
+Three ways to put plug-ins in Probes:
+
+- **REAPER, a whole track or project at once.** Load the scripts *SessionScope - Probe all FX* and
+  *SessionScope - Remove probes* (see the REAPER add-on below). The first swaps every VST3 effect
+  on the selected tracks (all tracks when none is selected) for a Probe holding the same plug-in
+  with the same settings; the second swaps them back. Automation envelopes on the swapped plug-ins
+  are not carried over (one undo step brings everything back), so try it on a copy first.
+- **VST3, any DAW, by hand.** Put **SessionScope Probe** (TRIVUNE) on a track where the plug-in
+  would go, pick the plug-in in the Probe's window, then close and reopen the window to see the
+  plug-in's own controls.
+- **CLAP.** Next to every CLAP plug-in installed on the computer, the DAW lists a twin named
+  "*name* (SessionScope Probe)". Use the twin instead of the original.
+
+Checked so far: Steinberg's validator and clap-validator pass; in a real REAPER 7.83, seven
+third-party VST3 effects were wrapped, timed, saved, reopened and unwrapped with the same settings.
+Not yet tried by hand: the picker window, Cubase, Ableton Live, a CLAP host
+(`handoff/task-manager-plan.md` lists what is left). If a DAW behaves oddly with a Probe, set the
+environment variable `SESSIONSCOPE_PROBE_LOG` to a file path before starting the DAW: the Probe
+then writes down what the DAW asks of it.
 
 ## Record and analyse
 
@@ -93,6 +128,8 @@ sessionscope list                       # recorded traces, oldest first
 sessionscope report                     # newest trace: passes, bar heatmap, S1/S2 checks
 sessionscope report --metric workload   # the known load in fixture F7
 sessionscope simulate OUT               # a synthetic trace, labelled as such
+sessionscope probes                     # CPU per track and plug-in, from the Probes
+sessionscope install                    # copy the built plug-ins to where DAWs look
 ```
 
 ## REAPER add-on (optional)
@@ -100,13 +137,13 @@ sessionscope simulate OUT               # a synthetic trace, labelled as such
 Requirements: REAPER 7 (built against 7.77), Node 18+ for its Lua tests. Windows for the extension.
 
 ```sh
-python hosts/reaper/tools/reaper_install.py      # links the JSFX and scripts into your REAPER
-python hosts/reaper/tools/reaper_validate.py     # a real REAPER, isolated settings, dummy audio device
+sessionscope reaper install      # links the JSFX and scripts into your REAPER (uninstall: removes them)
+sessionscope reaper validate     # a real REAPER, isolated settings, dummy audio device, about 5 minutes
 ```
 
-On Windows, `setup.py` also installs the REAPER extension when REAPER is present. Traces then
+On Windows, the setup also installs the REAPER extension when REAPER is present. Traces then
 include `host.csv`, and reports add a "Realtime CPU" heatmap. In REAPER: _Actions > Show action
-list > New action > Load ReaScript_, and load the three `SessionScope - ...` scripts from
+list > New action > Load ReaScript_, and load the `SessionScope - ...` scripts from
 `Scripts/SessionScope`.
 
 1. Run **SessionScope - Build fixtures**. It writes the test projects to
@@ -117,19 +154,18 @@ list > New action > Load ReaScript_, and load the three `SessionScope - ...` scr
 
 ## Tests
 
-Building and testing use CMake (installed portable in `C:\tools`; see `handoff/cmake-move.md`):
-
 ```sh
 cmake --preset windows                                # once: set up build/cmake ("mac" on a Mac)
 cmake --build --preset windows                        # build everything that changed
 ctest --preset windows                                # engine, HUD and sensor-core tests (C++)
-ctest --preset windows-plugins                        # Steinberg's VST3 validator, clap-validator, a CLAP host
+ctest --preset windows-plugins                        # Steinberg's VST3 validator, clap-validator, small test hosts
                                                       # (macOS adds auval; close your DAW first)
 cd hosts/reaper/tests && npm install && npm test      # REAPER add-on: Lua modules under a fake REAPER
+                                                      # (after one npm install, ctest runs these too)
+build/engine/sessionscope reaper validate             # the add-on and the Probe inside a real, isolated REAPER
 ```
 
-There is no CI set up at the moment. The Python scripts in `tools/` still install the plug-ins and
-run the REAPER tools until the CMake move's last phase replaces them.
+There is no CI set up at the moment.
 
 ## Where this is going
 

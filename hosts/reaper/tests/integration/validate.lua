@@ -1,4 +1,4 @@
--- Headless validation inside a real REAPER, started by hosts/reaper/tools/reaper_validate.py with an isolated
+-- Headless validation inside a real REAPER, started by `sessionscope reaper validate` (engine/src/reaper_tools.cpp) with an isolated
 -- resource folder (-cfgfile), so the user's own REAPER setup is never touched.
 --
 --   1. builds every fixture (F1-F5, F7) through the real API and records any problems
@@ -326,6 +326,7 @@ record('F5', { audible = true, from = 13, seek_at = 21, seek_to = 45, until_bar 
 record('F8', { from = 1, seconds = 34 })   -- the whole song (29 s) and a loop wrap, across three signature changes
 
 job('finish', function()
+  result.complete = true   -- every job ran: `sessionscope reaper validate` looks for this
   save_result()
   r.Main_OnCommand(QUIT, 0)
   return true

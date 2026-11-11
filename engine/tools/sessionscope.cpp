@@ -1,5 +1,6 @@
-// The sessionscope command-line program. For now: record a trace from a running sensor, in any DAW,
-// and list recorded traces. Built by tools/build_engine.py into build/engine/.
+// The sessionscope command-line program: record a trace from a running sensor (in any DAW), list
+// and report on recorded traces, write synthetic ones, install the plug-ins (engine/src/install.h)
+// and run the REAPER tools (engine/src/reaper_tools.h). Built by CMake into build/engine/.
 
 #include <atomic>
 #include <chrono>
@@ -13,7 +14,10 @@
 #include <string>
 #include <thread>
 
+#include "install.h"
 #include "json.h"
+#include "probe_monitor.h"
+#include "reaper_tools.h"
 #include "report.h"
 #include "ring_reader.h"
 #include "simulate.h"
@@ -35,6 +39,9 @@ constexpr const char *USAGE =
     "  sessionscope simulate OUT [--scenario NAME] [--seed N] [--drop-every N] [--reset-at N]\n"
     "                       [--truncate] [--no-host]\n"
     "                       write a synthetic trace\n"
+    "  sessionscope probes [--json]                     CPU per track and plug-in, from the SessionScope Probes\n"
+    "  sessionscope install [--uninstall] [--from DIR]  copy the built plug-ins to where DAWs look\n"
+    "  sessionscope reaper install|uninstall|validate   the REAPER scripts and the validation run\n"
     "  sessionscope --version\n"
     "  sessionscope --help\n";
 
@@ -338,6 +345,64 @@ int report_command(int argc, char *argv[]) {
     return 0;
 }
 
+// What the HUD's Task Manager shows, as text: every running SessionScope Probe, grouped by track,
+// with the share of the audio block's time its plug-in used over one second. Watches the probes'
+// shared table for that second, then prints. --json prints the same as data, for scripts.
+int probes_command(int argc, char *argv[]) {
+    bool json = false;
+    for (int i = 2; i < argc; ++i) {
+        if (std::string(argv[i]) == "--json") {
+            json = true;
+        } else {
+            std::fprintf(stderr, "Unknown option: %s\n%s", argv[i], USAGE);
+            return 2;
+        }
+    }
+
+    ProbeMonitor monitor(probes::TABLE_NAME, false);   // false: only look, leave the peaks to the HUD
+    for (int reading = 0; reading < 11; ++reading) {   // 11 readings, 100 ms apart: one second of differences
+        if (reading > 0) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        monitor.tick();
+    }
+
+    if (json) {
+        std::vector<JsonValue> tracks;
+        for (const TrackLoad &track : monitor.tracks()) {
+            std::vector<JsonValue> plugins;
+            for (const PluginLoad &plugin : track.plugins) {
+                plugins.emplace_back(std::vector<std::pair<std::string, JsonValue>>{
+                    {"name", JsonValue(plugin.name)},
+                    {"cpu", JsonValue(plugin.cpu)},
+                    {"peak", JsonValue(plugin.peak)},
+                    {"blocks", JsonValue(static_cast<double>(plugin.blocks))},
+                    {"process_id", JsonValue(static_cast<double>(plugin.process_id))}});
+            }
+            tracks.emplace_back(std::vector<std::pair<std::string, JsonValue>>{
+                {"name", JsonValue(track.name)},
+                {"order", JsonValue(static_cast<double>(track.order))},
+                {"cpu", JsonValue(track.cpu)},
+                {"plugins", JsonValue(std::move(plugins))}});
+        }
+        const JsonValue report(std::vector<std::pair<std::string, JsonValue>>{{"tracks", JsonValue(std::move(tracks))}});
+        std::printf("%s\n", json_text(report, 2).c_str());
+        return 0;
+    }
+
+    if (!monitor.any()) {
+        std::printf("No SessionScope Probe is running. Put 'SessionScope Probe' on a track, pick a plug-in in it, and play.\n");
+        return 0;
+    }
+    std::printf("%-40s %8s %8s %12s\n", "Track / plug-in", "CPU", "Peak", "Blocks");
+    for (const TrackLoad &track : monitor.tracks()) {
+        std::printf("%-40.40s %7.2f%% %7.2f%%\n", track.name.c_str(), track.cpu * 100, track.peak * 100);
+        for (const PluginLoad &plugin : track.plugins) {
+            std::printf("  %-38.38s %7.2f%% %7.2f%% %12llu\n", plugin.name.c_str(), plugin.cpu * 100, plugin.peak * 100,
+                        static_cast<unsigned long long>(plugin.blocks));
+        }
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -350,6 +415,9 @@ int main(int argc, char *argv[]) {
         if (command == "list") return list_command(argc, argv);
         if (command == "report") return report_command(argc, argv);
         if (command == "simulate") return simulate_command(argc, argv);
+        if (command == "probes") return probes_command(argc, argv);
+        if (command == "install") return install_command(argc, argv);
+        if (command == "reaper") return reaper_command(argc, argv);
         if (command == "--version") {
             std::printf("sessionscope 0.1.0\n");
             return 0;

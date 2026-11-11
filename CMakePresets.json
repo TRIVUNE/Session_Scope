@@ -40,6 +40,20 @@
     {
       "name": "mac",
       "configurePreset": "mac"
+    },
+    {
+      "name": "windows-install",
+      "configurePreset": "windows",
+      "targets": [
+        "install_sessionscope"
+      ]
+    },
+    {
+      "name": "mac-install",
+      "configurePreset": "mac",
+      "targets": [
+        "install_sessionscope"
+      ]
     }
   ],
   "testPresets": [
@@ -90,6 +104,52 @@
           "label": "plugins"
         }
       }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "windows",
+      "displayName": "Set up, build, test and install",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows"
+        },
+        {
+          "type": "build",
+          "name": "windows"
+        },
+        {
+          "type": "test",
+          "name": "windows"
+        },
+        {
+          "type": "build",
+          "name": "windows-install"
+        }
+      ]
+    },
+    {
+      "name": "mac",
+      "displayName": "Set up, build, test and install",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "mac"
+        },
+        {
+          "type": "build",
+          "name": "mac"
+        },
+        {
+          "type": "test",
+          "name": "mac"
+        },
+        {
+          "type": "build",
+          "name": "mac-install"
+        }
+      ]
     }
   ]
 }

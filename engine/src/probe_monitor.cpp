@@ -24,7 +24,8 @@ void push_window(std::vector<T> &list, T value) {
 
 }  // namespace
 
-ProbeMonitor::ProbeMonitor(const char *table_name) : table_(probes::open_table(table_name)) {}
+ProbeMonitor::ProbeMonitor(const char *table_name, bool take_peaks)
+    : table_(probes::open_table(table_name)), take_peaks_(take_peaks) {}
 
 void ProbeMonitor::tick(double daw_process_id) {
     tracks_.clear();
@@ -53,7 +54,9 @@ void ProbeMonitor::tick(double daw_process_id) {
 
         // The counters, and their growth since the last reading.
         const std::uint64_t cost = slot.cost_ns.load(), budget = slot.budget_ns.load();
-        const double peak = static_cast<double>(slot.peak_permille.exchange(0)) / 1000.0;   // take it: next time starts at 0
+        // The worst block: taken (set back to 0, so the next reading starts fresh) or only looked at.
+        const std::uint64_t peak_permille = take_peaks_ ? slot.peak_permille.exchange(0) : slot.peak_permille.load();
+        const double peak = static_cast<double>(peak_permille) / 1000.0;
         Previous p = previous_.count(owner) ? previous_[owner] : Previous{cost, budget, {}, {}, {}};
         push_window(p.costs, cost >= p.cost_ns ? cost - p.cost_ns : 0);
         push_window(p.budgets, budget >= p.budget_ns ? budget - p.budget_ns : 0);
@@ -70,6 +73,8 @@ void ProbeMonitor::tick(double daw_process_id) {
         load.cpu = window_budget ? static_cast<double>(window_cost) / static_cast<double>(window_budget) : 0;
         load.peak = *std::max_element(p.peaks.begin(), p.peaks.end());
         load.slot_owner = owner;
+        load.blocks = slot.blocks.load();
+        load.process_id = process;
 
         // Into its track (by name; a probe without a track name gets a track of its own).
         const std::string track_name = track[0] ? track : "(track)";

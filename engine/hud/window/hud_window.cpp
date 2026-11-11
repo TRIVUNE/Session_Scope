@@ -16,7 +16,7 @@
 #include <vector>
 
 // stb_image_write: a one-file PNG writer (public domain, github.com/nothings/stb, fetched pinned by
-// tools/get_hud_deps.py). Defining STB_IMAGE_WRITE_IMPLEMENTATION in exactly one .cpp file turns
+// cmake/third_party.cmake). Defining STB_IMAGE_WRITE_IMPLEMENTATION in exactly one .cpp file turns
 // its header into code. STBI_WRITE_NO_STDIO: we open the file ourselves (C++ streams handle
 // paths with any characters, its own C file code doesn't on Windows).
 #define STB_IMAGE_WRITE_IMPLEMENTATION

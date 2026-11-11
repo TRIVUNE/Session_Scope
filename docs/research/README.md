@@ -4,7 +4,7 @@ One record per feasibility spike (blueprint 10.4, 10.7): question, setup, source
 limitations, result, next decision. Negative results count. A spike passes on evidence, never
 because the code compiled once.
 
-Automated evidence comes from `python hosts/reaper/tools/reaper_validate.py`: a real REAPER in an isolated
+Automated evidence comes from `sessionscope reaper validate` (before November 2026: `reaper_validate.py`): a real REAPER in an isolated
 resource folder, on REAPER's dummy audio device, building the fixtures and recording traces, with
 the SessionScope extension loaded when it has been built. The dummy device is silent and needs
 no driver, but its timing is not a real interface's: see S2.

@@ -30,6 +30,8 @@ struct PluginLoad {
     double cpu = 0;    // share of the block time over the last second, 0..1 (can pass 1 when overloaded)
     double peak = 0;   // the worst single block in the last second, same scale
     std::uint64_t slot_owner = 0;   // stable identity while the probe runs (for the module's state)
+    std::uint64_t blocks = 0;       // audio blocks timed since the probe started
+    std::uint64_t process_id = 0;   // the DAW the probe runs in
 };
 
 // One track: its plug-ins, in the order their probes appeared, and their sums.
@@ -44,7 +46,10 @@ struct TrackLoad {
 class ProbeMonitor {
 public:
     // `table_name`: the shared table to read; tests and the demo use their own.
-    explicit ProbeMonitor(const char *table_name = probes::TABLE_NAME);
+    // `take_peaks`: reading a probe's worst block also sets it back to 0, so the next reading
+    // starts fresh. Only one reader may do that (the HUD); a second reader (`sessionscope probes`)
+    // passes false and only looks, so it can't take peaks away from the HUD.
+    explicit ProbeMonitor(const char *table_name = probes::TABLE_NAME, bool take_peaks = true);
 
     // Reads the table. Call about ten times a second; `daw_process_id` (from the sensor) keeps
     // probes from another DAW out, 0 shows every probe.
@@ -65,6 +70,7 @@ private:
     };
 
     probes::Table *table_ = nullptr;
+    bool take_peaks_ = true;
     std::map<std::uint64_t, Previous> previous_;   // by slot owner id
     std::vector<TrackLoad> tracks_;
 };

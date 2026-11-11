@@ -10,6 +10,10 @@
 #   ctest --preset windows         # run every test
 #   (on a Mac: the same with "mac")
 #
+# Or all of it in one command, ending with the plug-ins installed where DAWs look for them:
+#
+#   cmake --workflow --preset windows   # set up, compile, test, install
+#
 # What gets built, and where:
 #   build/engine/sessionscope.exe     the console program (record, report, simulate...)
 #   build/engine/SessionScopeHUD.exe  the HUD window
@@ -43,3 +47,26 @@ include(cmake/third_party.cmake)
 enable_testing()
 add_subdirectory(engine)
 add_subdirectory(native)
+
+# ---- the REAPER add-on's Lua tests (hosts/reaper/tests): the Lua modules under a fake REAPER,
+# run by Node. Only added when Node is installed and `npm install` has been run there once
+# (it fetches fengari, a Lua written in JavaScript); re-run `cmake --preset ...` afterwards.
+find_program(NODE_PROGRAM node)
+set(lua_tests "${CMAKE_SOURCE_DIR}/hosts/reaper/tests")
+if(NODE_PROGRAM AND EXISTS "${lua_tests}/node_modules/fengari")
+  add_test(NAME reaper_lua COMMAND "${NODE_PROGRAM}" run.js WORKING_DIRECTORY "${lua_tests}")
+endif()
+
+# ---- installing: `cmake --build --preset windows-install`, the last step of the workflow preset
+# Runs the console program's own install command (engine/src/install.h): it copies the plug-ins
+# into the per-user and shared plug-in folders and the REAPER extension into REAPER.
+add_custom_target(install_sessionscope
+                  COMMAND sessionscope install --from "${CMAKE_SOURCE_DIR}/build/native"
+                  USES_TERMINAL   # show its messages as they come
+                  COMMENT "Installing the SessionScope plug-ins")
+# Everything it copies must be built first (the names differ a little between Windows and macOS).
+foreach(plugin vst3_sensor vst3_probe clap_sensor clap_probe au_sensor reaper_extension)
+  if(TARGET ${plugin})
+    add_dependencies(install_sessionscope ${plugin})
+  endif()
+endforeach()

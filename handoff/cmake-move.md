@@ -1,20 +1,23 @@
-# The move from Python to CMake: where it stands
+# The move from Python to CMake: done
 
 The person decided (7 Nov 2026) that the build moves from the Python scripts in `tools/` and
-`hosts/reaper/tools/` to CMake, and Python is then removed. Phases 1 and 2 are done; **phase 3 is
-not started: the person said to stop there for now. Ask before starting it.**
+`hosts/reaper/tools/` to CMake, and Python is then removed. All three phases are done (phase 3 on
+11 Nov 2026, after the person said to go ahead): there is no Python left in the repository.
 
 ## How to build now
 
-CMake 4.4.5 and Ninja 1.13.2 are installed portable in `C:\tools\cmake` and `C:\tools\ninja`, and
-on the user PATH (a terminal opened before 7 Nov may not see them yet).
+CMake 4.4.5 and Ninja 1.13.2 must be on the PATH. On the person's current computer they come from
+scoop (`scoop install cmake ninja`); an earlier computer had them portable in `C:\tools`.
 
 ```
 cmake --preset windows              # once (and after adding files): sets up build/cmake
 cmake --build --preset windows      # builds what changed
-ctest --preset windows              # unit tests: 19 pass
-ctest --preset windows-plugins      # VST3 validator, clap-validator, CLAP test host: 3 pass
+ctest --preset windows              # unit tests
+ctest --preset windows-plugins      # VST3 validator, clap-validator, test hosts
                                     # (they use the real shared memory: close any DAW first)
+cmake --workflow --preset windows   # all of the above (not the plug-in checks), then install
+build/engine/sessionscope install   # only install (--uninstall removes)
+build/engine/sessionscope reaper install|uninstall|validate
 ```
 
 Outputs are where they always were: `build/engine/` (sessionscope.exe, SessionScopeHUD.exe,
@@ -40,31 +43,24 @@ library (the HUD links `glfw` directly); a list on a custom command's line is cu
 Windows' shell (`;` and `|` both fail), so the font list goes through a file; clap-validator colours
 its numbers, so its check reads the `--json` report.
 
-## Phase 3: what's left (not started)
+## Phase 3: what replaced what
 
-1. **Installing**, from `tools/install_paths.py`, `install_plugins.py` and `setup.py`: copy the
-   sensor into the per-user plug-in folders (required) and the shared ones (optional, needs
-   administrator rights), skip files that are already identical, say clearly when the DAW has a file
-   open; uninstall; the REAPER extension into `%APPDATA%\REAPER\UserPlugins` if REAPER is installed.
-   Plan: a `sessionscope install` / `sessionscope install --uninstall` command in the C++ console
-   program (`engine/tools/sessionscope.cpp`), run by a CMake target or after building.
-2. **REAPER tools**, from `hosts/reaper/tools/reaper_install.py` (link or copy the JSFX and scripts
-   into a REAPER resource folder; a junction on Windows; never touch folders it didn't make) and
-   `reaper_validate.py` (an isolated REAPER with the dummy audio device, runs
-   `hosts/reaper/tests/integration/validate.lua`, prints a summary from `result.json`, then the
-   analyser's report per trace). Plan: `sessionscope reaper install|uninstall|validate`; the engine
-   already has a JSON reader (`engine/src/json.h`). Read the whole Python script first: its summary
-   part is long.
-3. **One-command setup** replacing `setup.py`, e.g. a CMake workflow preset (configure, build,
-   test, install).
-4. **Delete** every `.py` in `tools/` and `hosts/reaper/tools/`, then update README (quick start,
-   install, tests), `guide.md` (build commands), `native/README.md`, `STATUS.md`, this note.
-   Search for "python" afterwards: nothing should still point to a deleted script. Still pointing
-   at Python now: README's quick start (`python tools/setup.py`) and install section
-   (`install_plugins.py`), guide.md's REAPER validation line and its "Trying the HUD" paragraph,
-   `native/README.md`. Build and test commands in README, guide and `engine/hud/README.md` already
-   use CMake. There is no CI in the repository (an old README line claimed there was; removed).
+| Python script | Now |
+| --- | --- |
+| `tools/install_paths.py`, `install_plugins.py`, install steps of `setup.py` | `sessionscope install [--uninstall] [--from DIR]`: `engine/src/install.h/.cpp`, tested by `engine/tests/test_install.cpp` in a scratch folder |
+| `hosts/reaper/tools/reaper_install.py` | `sessionscope reaper install [--copy] [--resource DIR]` and `reaper uninstall`: `engine/src/reaper_tools.h/.cpp` (a junction on Windows, made with `FSCTL_SET_REPARSE_POINT`) |
+| `hosts/reaper/tools/reaper_validate.py` | `sessionscope reaper validate [--reaper PATH] [--timeout S] [--work DIR] [--keep]`, same file; the summary is `validation_summary()`, tested by `engine/tests/test_reaper_tools.cpp` |
+| `tools/setup.py` | `cmake --workflow --preset windows` (configure, build, test, then the `install_sessionscope` target, which runs `sessionscope install`) |
+| everything else in `tools/` | already replaced in phases 1 and 2 (table above) |
 
-Until phase 3 is done the Python scripts still work and are still the way to **install** the
-plug-ins (`python tools/setup.py`) and run the **REAPER** tools; for **building and testing**, use
-CMake.
+Things learned in phase 3:
+
+- `clap-validator`'s denormals test compares two timings of a plug-in that takes well under a
+  microsecond per block; on this computer it warns on every run. It now runs as its own check
+  (`clap_validator_denormals`) where a warning is allowed; the other tests still fail on any warning.
+- `validate.lua` saves `result.json` after every step, so "finished_utc is there" never meant
+  "finished". The last job now sets `complete = true`, and the command looks for that.
+- The console program finds the repository and `build/native` from its own location
+  (`build/engine/..`); `--from` / `--repo` override that.
+- The first `reaper validate` on a computer is slow: REAPER scans every installed plug-in once
+  into `build/reaper-validate`.

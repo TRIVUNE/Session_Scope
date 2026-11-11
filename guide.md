@@ -23,7 +23,8 @@ It is made of these parts, all in this repository:
 | Engine | C++: trace reader and recorder, statistics, reports, checks, the HUD's engine, and the console program `sessionscope` (record, list, report, simulate) | `engine/src/`, `engine/tools/` |
 | HUD | C++ window (GLFW, Dear ImGui; Direct3D 11 + DirectComposition on Windows, OpenGL on macOS), always on top, drawn every display frame | `engine/hud/` |
 | REAPER add-on (optional) | Sensor JSFX, ReaScripts (recorder, inventory, fixture builder), and the extension that times REAPER's own work on every block (realtime CPU) into `host.csv` and shared memory `SessionScope_host_v1` | `hosts/reaper/` |
-| Tools | Build and install scripts (Python, build only), with the pinned Zig compiler | `tools/` |
+| Probe (VST3) | Wraps one plug-in and times it, for CPU per track and plug-in (the Task Manager module) | `native/vst3_probe/` |
+| Build | CMake: the pinned Zig compiler and toolkits are fetched and checked; `sessionscope install` copies the plug-ins into place | `CMakeLists.txt`, `cmake/` |
 
 Data flow: **sensor / extension → shared memory or trace folder → engine (C++) → HUD window**, or → `sessionscope report`.
 
@@ -115,7 +116,7 @@ REAPER here is now 7.83, the version the blueprint pins.
 
 ### 1. Needs you at the computer (finishes P1)
 
-Trying the HUD is now two steps (see README): `python tools/setup.py` once, then
+Trying the HUD is now two steps (see README): `cmake --workflow --preset windows` once, then
 `build/engine/SessionScopeHUD.exe`, and the sensor on the master track. The HUD's checklist says what's missing.
 
 - [ ] **Try another DAW** (Live, Cubase, Bitwig; CLAP in Bitwig or REAPER): the bar and tempo in
@@ -141,7 +142,7 @@ Trying the HUD is now two steps (see README): `python tools/setup.py` once, then
 - [ ] **Run Steinberg's `validator`** on `SessionScope.vst3` (it is built with the VST3 SDK in
       `.toolchain/vst3sdk`; needs a CMake build of the SDK's `validator` target) and fix anything it reports.
 - [ ] **VST3 bundle format**: hosts other than REAPER expect `SessionScope.vst3/Contents/x86_64-win/`.
-      Make `install_vst3.py` install the bundle, then test in another host (e.g. Bitwig, Cubase demo).
+      Done: `sessionscope install` installs the bundle. Still to do: test in another host.
 - [x] **HUD comfort**: remembers window size and position (`hud.ini`), a compact mode (meter
       only), click a bar to see its blocks pass by pass.
 - [ ] **HUD next**: a settings panel (hotkey, meter window length). The old HTML prototype was
@@ -149,8 +150,8 @@ Trying the HUD is now two steps (see README): `python tools/setup.py` once, then
 - [ ] **HUD packaging**: the HUD and the console program are single native executables; for P4,
       ship them with the sensor in one installer.
 - [ ] **Commenting pass**: the older files still need the line-by-line comments:
-      `hosts/reaper/Scripts/SessionScope/lib/*.lua`, the JSFX, then `tools/*.py`.
-- [x] CLAP sensor (`native/clap_sensor`), checked with `python tools/run_clap_validator.py`.
+      `hosts/reaper/Scripts/SessionScope/lib/*.lua` and the JSFX.
+- [x] CLAP sensor (`native/clap_sensor`), checked with `ctest --preset windows-plugins`.
 - [ ] Spike S3 (probe pairs) if still wanted.
 
 ### HUD: lessons from MiniMeters (looked at its install on 30 Oct; nothing copied)
@@ -198,7 +199,7 @@ cmake --build --preset windows                               # everything: engin
 ctest --preset windows                                       # C++ tests
 ctest --preset windows-plugins                               # VST3 + CLAP validators (close your DAW)
 cd hosts/reaper/tests && npm test                            # Lua, fake REAPER
-python hosts/reaper/tools/reaper_validate.py                 # real REAPER, isolated, ~5 minutes (Python until the CMake move's phase 3)
+build/engine/sessionscope.exe reaper validate                # real REAPER, isolated, ~5 minutes
 build/engine/SessionScopeHUD.exe --replay <trace> --screenshot out.png   # one HUD frame to a PNG
 ```
 

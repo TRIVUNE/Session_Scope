@@ -1,3 +1,6 @@
+// Tests for checks.h: the checks a report runs on a trace (dummy audio device, xruns, the S1 bar
+// mapping and the S2 lateness proxy).
+
 #include "checks.h"
 #include "blocks.h"
 #include "trace.h"
@@ -46,7 +49,7 @@ int main() {
     {
         // We need a full trace with sensor and transport data.
         // Since constructing TraceReader is complex in unit tests,
-        // we'll rely on the integration test (build_engine.py --test)
+        // we'll rely on the integration test (test_golden_reports.cpp)
         // to run the full test suite with real trace folders.
         // Here we just verify the helper functions work.
     }
