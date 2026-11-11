@@ -128,8 +128,9 @@ Trying the HUD is now two steps (see README): `cmake --workflow --preset windows
       late. Note where in the song (the bar map) they happen.
 - [ ] **Bars after signature changes** (optional): a project with 3/4 or 7/8 bars; the bar number
       should count up with no jumps. (The F8 fixture has this, built by *SessionScope - Build fixtures*.)
-- [ ] **S2 on the audio interface** (Komplete Audio, ASIO, 48 kHz / 256 then 128): record F7b and
-      F7a twice each, then `build/engine/sessionscope.exe report`. Steps in `docs/research/S2-lateness.md`.
+- [x] **S2 on the audio interface** (Komplete Audio 6 MK2, ASIO, 48 kHz, 256 and 128; 11 Nov 2026):
+      the lateness proxy does not follow load on real hardware, and the HUD's Dropouts module
+      counts false dropouts there. `docs/research/S2-lateness.md`.
 - [ ] **Spike E**: Performance Meter on F2 with nothing / sensor / sensor + recorder + extension.
 - [ ] **Spike C with real plugins**: a linear-phase EQ and a look-ahead limiter; compare
       *SessionScope - Inventory* with REAPER's PDC display.

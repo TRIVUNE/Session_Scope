@@ -42,6 +42,11 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
 
 ## Next, in order
 
+0. **Decide how the HUD detects a dropout** (the person's decision; found on 11 Nov 2026 by S2
+   on the real interface). The Komplete Audio's ASIO driver spaces its callbacks 4, 4, 8 ms, so
+   every third block is "50 % late" and the Dropouts module counted 749 dropouts in a session
+   at 2 % load. The lateness measure also does not follow load on real hardware. The numbers and
+   three ways to fix it are in `docs/research/S2-lateness.md`. Offer them; build what is picked.
 1. **The Probes, by hand in more DAWs.** The Task Manager is built end to end (all three phases
    of `task-manager-plan.md`): the VST3 Probe, the CLAP Probe, track names from the host, the
    REAPER scripts that wrap every effect on a track, `sessionscope probes`. It was checked in a

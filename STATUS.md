@@ -30,7 +30,7 @@ Where things are in the repository: see the table in [README.md](README.md).
 | D, CPU per FX/track | Not available from REAPER. **Total realtime CPU is**: the extension tracks a known load within 1.5 points |
 | E, overhead | Sensor: p99 ≈ 2 µs per block (0.04 % of the deadline) |
 | S1, bar mapping | Passed: 100 % agreement across tempo changes, seeks and loops |
-| S2, lateness proxy | Can't be judged on the dummy device; needs a real interface |
+| S2, lateness proxy | **Answered on real hardware (11 Nov 2026): no.** On the Komplete Audio 6 MK2 (ASIO, 48 kHz, 256 and 128) the driver spaces callbacks 4, 4, 8 ms, so the proxy reads 50 % at rest; with anticipative FX off it *falls* as load rises, with it on it only jumps once the audio breaks up. Realtime CPU from the extension follows the known load within 1 point (anticipative off). `docs/research/S2-lateness.md` |
 | T10, two sensors | Passed: warned, one writer recorded, no false alarm when switching projects |
 
 Two findings that shape gate G1:
@@ -40,7 +40,8 @@ Two findings that shape gate G1:
 ## To do
 
 ### Now: finish P1 (needs you at the computer)
-- [ ] **S2 on your audio interface.** Install into your REAPER (`build/engine/sessionscope reaper install`; `sessionscope install` puts `reaper_sessionscope.dll` into `%APPDATA%\REAPER\UserPlugins\`), restart REAPER. Open `SessionScope/fixtures/F7b/F7b.rpp` with the Komplete Audio ASIO driver at 48 kHz / 256, run *SessionScope - Record trace*, play bars 1–24 twice, stop. Repeat with F7a, then both at 128 samples. Then `build/engine/sessionscope.exe report` for each. Steps in `docs/research/S2-lateness.md`.
+- [x] **S2 on your audio interface** (11 Nov 2026, Komplete Audio 6 MK2, ASIO, 48 kHz at 256 and 128, in the validation's isolated REAPER by script): done, result in the table above and in `docs/research/S2-lateness.md`.
+- [ ] **The HUD's Dropouts module counts false dropouts on this interface** (found by S2): the driver's callback pattern (4, 4, 8 ms) makes every third block "50 % late", so a session at 2 % load showed 749 dropouts and 0 % headroom. Needs a decision on how a dropout is detected; three ways are listed at the end of `docs/research/S2-lateness.md`.
 - [ ] **Spike E.** On fixture F2, note REAPER's Performance Meter (RT CPU, longest block) with nothing loaded, then with the sensor, then with sensor + recorder + extension.
 - [ ] **Spike C with real plugins.** Add a third-party linear-phase EQ and a look-ahead limiter, run *SessionScope - Inventory*, compare the reported delay with REAPER's own PDC display in the FX window.
 
@@ -72,7 +73,7 @@ Two findings that shape gate G1:
   1. Build: a fresh clone builds with CMake alone, 0 warnings, 21/21 unit tests and 10/10 plug-in checks. It found one problem: in a deep folder git could not write the VST3 SDK's longest file names ("Filename too long"), and the half-finished download was then used on the next run. Fixed in `cmake/fetch.cmake`.
   2. Bugs: everything written or changed this round was reviewed and tested, and the audio-thread writers (`sensor_ring.h`, `probe_table.h`, the REAPER extension) and the settings reader were read through. **Not** a line-by-line review of the whole engine and HUD. Bugs found and fixed, all by running things for real: two probes writing into one slot of the shared table after a slow project load; the picker's choice lost in REAPER (it asked for a full reload); a REAPER link that led nowhere when the repository path was typed with "/"; a validation run that looked finished when it was cut short.
   3. Readability: every source file starts with what it is (14 had no opening comment); README, guide, handoff and this list were brought in line with the code.
-- [ ] **The big check, pass 4 (live)**, partly done. Done on 11 Nov 2026 in REAPER 7.83 with the dummy audio device: a session of three tracks with seven third-party VST3 effects in Probes and the VST3 Sensor on the master; the HUD showed the tracks and plug-ins in the Task Manager, bars on the heatmap, and REAPER's memory; the HUD used 5.5 % of one core and 59 MB, REAPER 9 % of one core. Still to do, with a person at the computer: the same on the real audio interface (on the dummy device the Dropouts module counts hundreds of late blocks, because that device does not keep real time: the known limit behind S2), and in Cubase and Ableton Live.
+- [ ] **The big check, pass 4 (live)**, partly done. Done on 11 Nov 2026 in REAPER 7.83 with the dummy audio device: a session of three tracks with seven third-party VST3 effects in Probes and the VST3 Sensor on the master; the HUD showed the tracks and plug-ins in the Task Manager, bars on the heatmap, and REAPER's memory; the HUD used 5.5 % of one core and 59 MB, REAPER 9 % of one core. The same session was then played on the Komplete Audio 6 MK2 (ASIO, 48 kHz / 256): the Task Manager, heatmap and memory read the same, and the Dropouts module showed 749 false dropouts (the item above). Still to do, with a person at the computer: Cubase and Ableton Live.
 
 ### Gate G1: choose the MVP path
 - [ ] Write the decision record: path B (bar heatmap + latency + before/after comparisons) looked likely while per-FX/per-track CPU wasn't available; the Probe (Task Manager phase 2) would make it available in any VST3 host, so revisit once it works. Decide which metric the heatmap shows in REAPER: realtime CPU (extension), the sensor proxy (after S2), or both.
