@@ -21,10 +21,16 @@ function(fetch_git folder url tag commit)
     if("RECURSIVE" IN_LIST ARGN)
       set(extra --recurse-submodules --shallow-submodules)
     endif()
-    execute_process(COMMAND "${GIT_EXECUTABLE}" -c advice.detachedHead=false clone --quiet --depth 1 --branch ${tag}
-                            ${extra} ${url} "${dest}"
+    # core.longpaths: the VST3 SDK holds files with very long names (its documentation and sample
+    # pictures). When the repository itself sits in a deep folder, the full path passes the 260
+    # letters Windows normally allows and git stops with "Filename too long". With this setting
+    # git writes them anyway. (We never compile those files.)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" -c advice.detachedHead=false -c core.longpaths=true
+                            clone --quiet --depth 1 --branch ${tag} ${extra} ${url} "${dest}"
                     RESULT_VARIABLE failed)
     if(failed)
+      # A half-finished download must not stay: the next run would find the folder and use it.
+      file(REMOVE_RECURSE "${dest}")
       message(FATAL_ERROR "Could not download ${url} (needs git and a network connection).")
     endif()
   endif()
