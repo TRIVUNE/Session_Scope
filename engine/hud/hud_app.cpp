@@ -233,6 +233,9 @@ int run_hud(const HudOptions &options) {
     // --test-drag starts halfway to the screenshot, so the screenshot shows the result.
     const auto drag_time = clock::now() + std::chrono::milliseconds(options.wait_ms / 2);
     int drag_step = 0;
+    // --test-wheel comes later, at three quarters, when the drag (23 frames) is long over.
+    const auto wheel_time = clock::now() + std::chrono::milliseconds(options.wait_ms * 3 / 4);
+    bool wheel_played = false;
     bool hidden = false;   // hidden by the hotkey or the tray icon
     bool quit = false;
 
@@ -301,6 +304,12 @@ int run_hud(const HudOptions &options) {
         if (can_be_seen(*window)) {
             window->begin_frame([&] {   // on Windows: sleeps here until the screen can take the frame
                 if (options.test_drag) play_test_drag(*options.test_drag, now >= drag_time, drag_step);
+                if (options.test_wheel && !wheel_played && now >= wheel_time) {   // --test-wheel: once
+                    ImGuiIO &io = ImGui::GetIO();
+                    io.AddMousePosEvent((*options.test_wheel)[0], (*options.test_wheel)[1]);   // the wheel acts where the mouse is
+                    io.AddMouseWheelEvent(0, (*options.test_wheel)[2]);
+                    wheel_played = true;
+                }
             });
             view->set_desktop_state(desktop_state);
             const ViewRequests r = view->draw(system, probes, snapshot, seconds(clock::now()));

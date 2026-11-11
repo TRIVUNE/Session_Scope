@@ -1,3 +1,5 @@
+-- lib/util.lua: CSV cells and rows, paths, and the buffered CSV writer.
+
 local util = require('util')
 
 test('csv cells: integers, microsecond floats, booleans, empty, quoting', function()

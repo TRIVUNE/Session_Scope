@@ -112,9 +112,9 @@ Three ways to put plug-ins in Probes:
   "*name* (SessionScope Probe)". Use the twin instead of the original.
 
 Checked so far: Steinberg's validator and clap-validator pass; in a real REAPER 7.83, seven
-third-party VST3 effects were wrapped, timed, saved, reopened and unwrapped with the same settings.
-Not yet tried by hand: the picker window, Cubase, Ableton Live, a CLAP host
-(`handoff/task-manager-plan.md` lists what is left). If a DAW behaves oddly with a Probe, set the
+third-party VST3 effects were wrapped, timed, saved, reopened and unwrapped with the same settings,
+the picker window loaded a plug-in, and the twin of a third-party CLAP plug-in was timed.
+Not yet tried: Cubase, Ableton Live, Bitwig (`handoff/task-manager-plan.md` lists what is left). If a DAW behaves oddly with a Probe, set the
 environment variable `SESSIONSCOPE_PROBE_LOG` to a file path before starting the DAW: the Probe
 then writes down what the DAW asks of it.
 

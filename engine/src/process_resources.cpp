@@ -1,3 +1,6 @@
+// process_resources.cpp - the memory and disk reads of the DAW, and the free memory of the
+// computer (see process_resources.h for the system calls used).
+
 #include "process_resources.h"
 
 #include <cmath>

@@ -1,3 +1,5 @@
+-- lib/fixtures.lua: the test projects (F1-F8) are built as specified, against the fake REAPER.
+
 local fixtures = require('fixtures')
 local fake = require('fake_reaper')
 local inventory = require('inventory')

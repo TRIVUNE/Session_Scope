@@ -1,6 +1,6 @@
 # SessionScope: status and next steps
 
-Last updated 6 November 2026. The working plan and next steps in one place: [guide.md](guide.md). Phases follow the blueprint's build plan (P0 → P7, gate G1).
+Last updated 11 November 2026. The working plan and next steps in one place: [guide.md](guide.md). Phases follow the blueprint's build plan (P0 → P7, gate G1).
 Where things are in the repository: see the table in [README.md](README.md).
 
 ## Done
@@ -40,7 +40,7 @@ Two findings that shape gate G1:
 ## To do
 
 ### Now: finish P1 (needs you at the computer)
-- [ ] **S2 on your audio interface.** Install into your REAPER (`python hosts/reaper/tools/reaper_install.py`), copy `build/native/reaper_sessionscope.dll` to `%APPDATA%\REAPER\UserPlugins\`, restart REAPER. Open `SessionScope/fixtures/F7b/F7b.rpp` with the Komplete Audio ASIO driver at 48 kHz / 256, run *SessionScope - Record trace*, play bars 1–24 twice, stop. Repeat with F7a, then both at 128 samples. Then `build/engine/sessionscope.exe report` for each. Steps in `docs/research/S2-lateness.md`.
+- [ ] **S2 on your audio interface.** Install into your REAPER (`build/engine/sessionscope reaper install`; `sessionscope install` puts `reaper_sessionscope.dll` into `%APPDATA%\REAPER\UserPlugins\`), restart REAPER. Open `SessionScope/fixtures/F7b/F7b.rpp` with the Komplete Audio ASIO driver at 48 kHz / 256, run *SessionScope - Record trace*, play bars 1–24 twice, stop. Repeat with F7a, then both at 128 samples. Then `build/engine/sessionscope.exe report` for each. Steps in `docs/research/S2-lateness.md`.
 - [ ] **Spike E.** On fixture F2, note REAPER's Performance Meter (RT CPU, longest block) with nothing loaded, then with the sensor, then with sensor + recorder + extension.
 - [ ] **Spike C with real plugins.** Add a third-party linear-phase EQ and a look-ahead limiter, run *SessionScope - Inventory*, compare the reported delay with REAPER's own PDC display in the FX window.
 
@@ -56,15 +56,18 @@ Two findings that shape gate G1:
 - [x] Engine and HUD ported to C++ (`engine/`): one native process instead of Python + Electron; the Python analyser and the web HUD are removed.
 - [x] HUD redesigned as a MiniMeters-style strip of modules (Nov 2026): peak meter, DAW CPU, core heatmap with bar lines, busiest core, dropouts, memory and disk, CPU clock. Drag to reorder, drag gaps to resize, pop modules out into their own windows, horizontal or vertical, frame-rate limit, opacity, tray icon, hide from taskbar, Ctrl+Alt+H, real Windows menus. Direct3D 11 + DirectComposition on the screen's own GPU. Code map: `engine/hud/README.md`.
 - [x] Task Manager, phase 1: the probes' shared table (`native/sensor_core/probe_table.h`), the reader (`engine/src/probe_monitor.*`), the module (CPU and peak per track, click a track for its plug-ins), simulated probes in `--demo`. Plan: `handoff/task-manager-plan.md`.
-- [ ] **Task Manager, phase 2: the SessionScope Probe VST3 plug-in** that loads a real plug-in inside it and times it (audio, parameters, editor, state, latency passed through; a picker for the plug-in). Then Steinberg's validator, REAPER, another DAW.
-- [ ] Task Manager, phase 3: CLAP probe; track names from the host (VST3 `IInfoListener`, CLAP `track-info`); a way to wrap every plug-in on a track.
-- [ ] HUD: scrolling in the Task Manager when there are more tracks than fit; macOS versions of the tray icon, hotkey and menus (Windows-only now).
+- [x] **Task Manager, phase 2: the SessionScope Probe VST3 plug-in** (`native/vst3_probe`, Windows) loads a real plug-in inside it and times it (audio, parameters, editor, state, latency passed through; a picker for the plug-in). Steinberg's validator passes (47/47). **Checked in a real REAPER 7.83 (11 Nov 2026):** seven third-party VST3 effects (Crisp, KClip3, Fuse Compressor, Flex Chorus, Duck, kHs Chorus, Crossover) were put in Probes in a running project; parameters, values, latency and bypass were the same as without the Probe; each was timed live and again after save + reopen; taking them out again gave back the original plug-ins unchanged. Details: `handoff/task-manager-plan.md`.
+- [x] Task Manager, phase 3: track names and positions from the host (VST3 `IInfoListener`; REAPER sends them); the CLAP probe (`native/clap_probe`: a timed "twin" of every installed CLAP plug-in; clap-validator and a test host pass); wrapping every VST3 effect on a track in REAPER (*SessionScope - Probe all FX* / *Remove probes*, `lib/probes.lua`); `sessionscope probes` prints the Task Manager's numbers in a terminal.
+- [x] Probes in REAPER 7.83, by script (11 Nov 2026): the picker window (a plug-in picked by sending its controls the messages of a click; the plug-in's own editor shows after reopening) and the CLAP probe (the twin of a third-party CLAP plug-in loaded with all its parameters and was timed).
+- [ ] Probes, still to check by hand: the VST3 Probe in Cubase and Ableton Live; the CLAP probe in Bitwig; a look at the windows by eye. Set `SESSIONSCOPE_PROBE_LOG` to a file path before starting the DAW to get a log of what the DAW asks the Probe.
+- [x] HUD: scrolling in the Task Manager when there are more rows than fit (mouse wheel, a thin scroll bar).
+- [ ] HUD: macOS versions of the tray icon, hotkey and menus (Windows-only now).
 - [x] Old HTML prototype (`design/hud-prototype/`) deleted: `SessionScopeHUD.exe --demo` shows the design.
 - [ ] HUD: a settings panel (hotkey), an installer (see guide.md).
-- [ ] **Build with CMake instead of Python** (decided Nov 2026). Every script in `tools/` and `hosts/reaper/tools/` moves to CMake (fetching toolkits with checked hashes, the Zig compiler, engine + HUD + tests, sensors, validators, installing plug-ins, the REAPER install/validation), then the Python scripts are deleted and the docs updated.
+- [x] **Build with CMake instead of Python** (decided Nov 2026, done 11 Nov 2026). Every script in `tools/` and `hosts/reaper/tools/` moved to CMake or into the console program (fetching toolkits with checked hashes, the Zig compiler, engine + HUD + tests, sensors, validators, installing plug-ins, the REAPER install/validation); the Python scripts are deleted and the docs updated.
   - [x] Phase 1: engine, console program, HUD and tests build with CMake (`cmake --preset windows`, `cmake --build --preset windows`, `ctest --preset windows`); GLFW, Dear ImGui, stb, Inter and Zig are fetched and checked by CMake. 18/18 tests pass.
   - [x] Phase 2: the sensors and the REAPER extension build with CMake (`native/CMakeLists.txt`); `ctest --preset windows-plugins` runs Steinberg's VST3 validator, clap-validator and the CLAP test host (3/3 pass). macOS bundles, Audio Unit and auval are written (`native/mac.cmake`) but not yet run on a Mac.
-  - [ ] Phase 3: installing the plug-ins and the REAPER install/validation move into the C++ console program; one-command setup; delete the Python scripts; update README, guide and handoff.
+  - [x] Phase 3 (11 Nov 2026): `sessionscope install` and `sessionscope reaper install|uninstall|validate` replace the Python scripts (`engine/src/install.*`, `engine/src/reaper_tools.*`, with tests); `cmake --workflow --preset windows` sets up, builds, tests and installs in one command; every Python script is deleted; README, guide and handoff updated. What replaced what: `handoff/cmake-move.md`.
 - [ ] **The big check, in 4 passes** (after the CMake move):
   1. Build: a fresh clone builds with CMake alone, every test passes, no warnings.
   2. Bugs: a correctness review of the engine, the HUD and the plug-ins.
@@ -83,4 +86,4 @@ Two findings that shape gate G1:
 
 ## Housekeeping
 - REAPER here is 7.83 since validation run 4 (30 Oct), the version the blueprint pins; runs 1-3 were on 7.77.
-- Build output (`build/`) and the compiler (`.toolchain/`) are not in git; `python tools/setup.py` recreates them.
+- Build output (`build/`) and the compiler (`.toolchain/`) are not in git; `cmake --workflow --preset windows` recreates them.

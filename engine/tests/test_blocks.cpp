@@ -1,3 +1,6 @@
+// Tests for blocks.h: turning sensor rows into blocks with a bar, a pass and a lateness, across
+// gaps, seeks, loops and tempo changes.
+
 #include "blocks.h"
 #include "trace.h"
 #include "test_support.h"

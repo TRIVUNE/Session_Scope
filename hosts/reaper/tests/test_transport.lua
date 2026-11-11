@@ -1,3 +1,5 @@
+-- lib/transport.lua: starts, stops, seeks, loop wraps and passes worked out from transport samples.
+
 local transport = require('transport')
 
 local function run(samples)

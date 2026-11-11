@@ -1,3 +1,5 @@
+-- lib/workload.lua: the known cost of the Workload JSFX at a position (fixture F7), from its sliders.
+
 local workload = require('workload')
 local fake = require('fake_reaper')
 

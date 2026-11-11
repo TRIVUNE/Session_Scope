@@ -35,6 +35,10 @@ struct HudOptions {
     // straight into Dear ImGui, so it tests our dragging and resizing code without depending on
     // how a test script's mouse is scaled by Windows.
     std::optional<std::array<float, 4>> test_drag;
+    // --test-wheel X,Y,NOTCHES: for testing. Three quarters of the way to the screenshot (after a
+    // --test-drag has finished), put the mouse at (X, Y) and turn the wheel NOTCHES notches
+    // (negative = towards you, which scrolls a list down). Fed into Dear ImGui like --test-drag.
+    std::optional<std::array<float, 3>> test_wheel;
 };
 
 // Runs the HUD; returns the program's exit code (0 = fine).

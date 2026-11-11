@@ -1,3 +1,5 @@
+-- lib/ring.lua: reading the sensor ring out of gmem, with wrap-around, resets and lost records.
+
 local ring = require('ring')
 
 -- A writer that does what the @block section of SessionScope Sensor.jsfx does.

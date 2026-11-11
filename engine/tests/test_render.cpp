@@ -1,3 +1,6 @@
+// Tests for render.h and text_format.h: number formatting, heat colours and the pieces a console
+// report is drawn from.
+
 #include "render.h"
 #include "text_format.h"
 #include "test_support.h"

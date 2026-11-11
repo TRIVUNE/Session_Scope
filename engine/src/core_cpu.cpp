@@ -1,3 +1,5 @@
+// core_cpu.cpp - how busy each core is (see core_cpu.h for what is read and from where).
+
 #include "core_cpu.h"
 
 #include <algorithm>

@@ -19,7 +19,7 @@ end
 
 test('every action script compiles', function()
   for _, name in ipairs({ 'SessionScope - Record trace.lua', 'SessionScope - Inventory.lua', 'SessionScope - Build fixtures.lua',
-    '../../tests/integration/validate.lua' }) do
+    'SessionScope - Probe all FX.lua', 'SessionScope - Remove probes.lua', '../../tests/integration/validate.lua' }) do
     local fn, err = loadfile(SCRIPTS .. name)
     truthy(fn, name .. ': ' .. tostring(err))
   end

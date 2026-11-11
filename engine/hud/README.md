@@ -21,7 +21,7 @@ refresh, so they slide smoothly instead of jumping.
 
 | File | What it does |
 | --- | --- |
-| `main.cpp` | Program start: reads the command line (`--demo`, `--replay`, `--screenshot`) |
+| `main.cpp` | Program start: reads the command line (`--demo`, `--replay`, `--screenshot`, and for tests `--test-drag`, `--test-wheel`) |
 | `hud_app.h/.cpp` | Makes the window, engine and readings, runs the main loop, saves settings |
 | `hud_view.h/.cpp` | Lays the modules out in a strip, drag and drop, the right-click menu |
 | `modules/module.h` | What a module is; the list of modules |
@@ -39,7 +39,8 @@ refresh, so they slide smoothly instead of jumping.
 
 Data sources in `engine/src/`: `hud_engine.*` (the sensor plug-in's data: lateness, transport,
 dropouts), `system_monitor.*` (this computer: `core_cpu.*`, `process_cpu.*`,
-`process_resources.*`, `cpu_clock.*`), `hud_settings.*` (`hud.ini`).
+`process_resources.*`, `cpu_clock.*`), `probe_monitor.*` (CPU per track and plug-in, from the
+SessionScope Probes: `handoff/task-manager-plan.md`), `hud_settings.*` (`hud.ini`).
 
 ## Where things come from
 

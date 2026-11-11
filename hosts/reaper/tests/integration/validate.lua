@@ -9,7 +9,9 @@
 --   5. T10: two sensors on one master must be reported as such
 --   6. identity: FX and track GUIDs across rename, reorder, copy, move and save + reopen (spike A)
 --   7. F8: records the whole song across three time-signature changes (spike S1)
---   8. writes <resource>/SessionScope/validation/result.json and quits REAPER
+--   8. probe: a VST3 effect swapped for a SessionScope Probe holding it must be timed, live and
+--      after save + reopen, and swap back (the Task Manager's data path, in a real host)
+--   9. writes <resource>/SessionScope/validation/result.json and quits REAPER
 --
 -- Audible fixtures are only played when the audio device is REAPER's dummy device.
 
@@ -20,6 +22,7 @@ package.path = lib .. '?.lua;' .. package.path
 local fixtures = require('fixtures')
 local inventory = require('inventory')
 local json = require('json')
+local probes = require('probes')
 local recorder = require('recorder')
 local util = require('util')
 
@@ -319,6 +322,67 @@ job('T10 record', function()
   r.Main_OnCommand(fixtures.CLOSE_TAB, 0)
   return true
 end)
+
+-- The SessionScope Probe (native/vst3_probe) with a real plug-in inside. The plug-in is our own
+-- VST3 Sensor: the one VST3 effect that is there on every computer that built this repository.
+-- lib/probes.lua swaps it for a Probe holding it; `sessionscope probes --json` (the console
+-- program, reading the probes' shared table as the HUD does) must then show the track with blocks
+-- being timed: live, and again after save + reopen, which is how REAPER normally loads a Probe.
+local SENSOR_VST3 = 'VST3:SessionScope Sensor (TRIVUNE)'
+local SENSOR_CLASS = '5E55F0A17C0D4B6E9A2E1D430B5C8E77'               -- native/vst3_sensor: its class id
+local probe = { checks = {}, path = util.join(out_root, 'probe.rpp') }
+local function probes_seen()                                         -- track listed? how many blocks timed?
+  local out = r.ExecProcess('"' .. here .. '../../../../build/engine/sessionscope.exe" probes --json', 10000) or ''
+  return out:find('"name": "Probe test"', 1, true) ~= nil, tonumber(out:match('"blocks":%s*(%d+)')) or 0
+end
+job('probe: wrap', function()
+  r.Main_OnCommand(fixtures.NEW_TAB, 0)
+  probe.proj = r.EnumProjects(-1)
+  r.InsertTrackAtIndex(0, true)
+  local tr = r.GetTrack(probe.proj, 0)
+  r.GetSetMediaTrackInfo_String(tr, 'P_NAME', 'Probe test', true)
+  if r.TrackFX_AddByName(tr, SENSOR_VST3, false, -1) < 0 then
+    probe.skipped = true
+    note('probe skipped', { reason = 'REAPER does not list the VST3 Sensor (build it, or let REAPER rescan its plug-ins)' })
+    return true
+  end
+  local ok, what = probes.wrap(r, tr, 0, true)                      -- true: the Sensor may be wrapped here
+  probe.checks.wrap_succeeds = ok
+  if not ok then probe.why = what end
+  local held = probes.read_probe(r, tr, 0)
+  probe.checks.probe_holds_the_plugin = held ~= nil and held.class_id == SENSOR_CLASS
+  r.CSurf_OnPlay()
+  return true
+end)
+job('probe: live', after(2.5, function()
+  if probe.skipped then return end
+  local listed, blocks = probes_seen()
+  probe.checks.live_lists_the_track = listed
+  probe.checks.live_times_blocks = blocks > 0
+  r.CSurf_OnStop()
+  r.Main_SaveProjectEx(probe.proj, probe.path, 8)
+  r.Main_OnCommand(fixtures.CLOSE_TAB, 0)
+  r.Main_OnCommand(fixtures.NEW_TAB, 0)                            -- and open it again, as a user would tomorrow
+  r.Main_openProject(probe.path)
+  probe.proj = r.EnumProjects(-1)
+  r.CSurf_OnPlay()
+end))
+job('probe: reopened', after(2.5, function()
+  if probe.skipped then r.Main_OnCommand(fixtures.CLOSE_TAB, 0) return end
+  local listed, blocks = probes_seen()
+  probe.checks.reopened_lists_the_track = listed
+  probe.checks.reopened_times_blocks = blocks > 0
+  r.CSurf_OnStop()
+  local tr = r.GetTrack(probe.proj, 0)
+  local ok = probes.unwrap(r, tr, 0)                                -- and back: the plug-in itself again
+  local _, name = r.TrackFX_GetFXName(tr, 0)
+  probe.checks.unwrap_puts_the_plugin_back = ok and r.TrackFX_GetCount(tr) == 1 and name:find('SessionScope Sensor', 1, true) ~= nil
+  local pass = true
+  for _, v in pairs(probe.checks) do pass = pass and v end
+  note('probe', { checks = probe.checks, passed = pass, why = probe.why })
+  r.Main_SaveProjectEx(probe.proj, probe.path, 8)                   -- saved, so closing does not ask
+  r.Main_OnCommand(fixtures.CLOSE_TAB, 0)
+end))
 
 record('F7b', { seconds = 50 })
 record('F7a', { seconds = 50 })

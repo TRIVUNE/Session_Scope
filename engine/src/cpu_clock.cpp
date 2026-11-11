@@ -1,3 +1,5 @@
+// cpu_clock.cpp - the CPU speed now against its rated speed (see cpu_clock.h for the sources).
+
 #include "cpu_clock.h"
 
 #ifdef _WIN32

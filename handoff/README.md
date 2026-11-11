@@ -1,7 +1,7 @@
 # Handoff: where the HUD is going
 
 For the next AI agent working on this repository. Read this first, then `README.md` and `guide.md`.
-Last updated 2026-11-07 (evening).
+Last updated 2026-11-11.
 
 ## The direction
 
@@ -22,7 +22,7 @@ and drags them into the order they want.
 - **Only what helps a session.** The person strips anything that isn't useful: no status lines,
   no labels for their own sake, no logos.
 - **Native and fast.** C++ only at run time, readable code with plain comments. The build is
-  moving from Python to CMake (`cmake-move.md`).
+  CMake (`cmake-move.md`); installing and the REAPER tools are commands of the console program.
 
 ## Done
 
@@ -34,6 +34,7 @@ and drags them into the order they want.
 | Dropouts | engine snapshot: blocks past the lateness "overrun" tier, headroom from late p99 |
 | Memory and disk | `ProcessResources` (DAW working set, bytes read) and `system_memory()` |
 | CPU clock | `CpuClock`: Windows Processor Information counters via pdh.dll, loaded at run time |
+| Task Manager (CPU per track and plug-in) | `ProbeMonitor`: the SessionScope Probes' shared table (`task-manager-plan.md`) |
 
 All machine readings go through `SystemMonitor` (`engine/src/system_monitor.h`), kept apart from
 `HudEngine` so engine snapshots stay reproducible from a trace. Settings (modules shown and order,
@@ -41,18 +42,23 @@ direction, on top, window place) are in `hud.ini` (`engine/src/hud_settings.h`).
 
 ## Next, in order
 
-1. **Task Manager: the Probe plug-in (phase 2 of `task-manager-plan.md`).** Phase 1 is done: the
-   probes' shared table, the reader and the module work, shown in `--demo` by simulated probes.
-   Next is the SessionScope Probe VST3 plug-in that loads a real plug-in and times it; then the
-   CLAP probe and track names from the host (phase 3). The full to-do list is in `STATUS.md`.
-2. **Build with CMake instead of Python, phase 3** (the person's decision): phases 1 and 2 are
-   done (CMake builds and tests everything); phase 3 (installing, the REAPER tools, setup, deleting
-   Python, docs) is **not started: the person said to stop before it. Ask before starting.**
-   Everything you need is in `cmake-move.md`.
-3. **The big check, 4 passes** (the person's request): see `STATUS.md`.
+1. **The Probes, by hand in more DAWs.** The Task Manager is built end to end (all three phases
+   of `task-manager-plan.md`): the VST3 Probe, the CLAP Probe, track names from the host, the
+   REAPER scripts that wrap every effect on a track, `sessionscope probes`. It was checked in a
+   real REAPER with third-party plug-ins, the picker window and the CLAP twins included. Not
+   yet done, because it needs a person in the DAW: Cubase, Ableton Live, Bitwig. The list is
+   near the end of `task-manager-plan.md`.
+2. **The big check, pass 4 (live)** and the rest of the person's P1 list in `STATUS.md` (the audio
+   interface, spike E, spike C with real plug-ins): these need the person at the computer.
+3. **Gate G1**: the decision record. The Probe makes per-plug-in CPU available in any VST3 host,
+   which was the missing piece for path A.
 4. **macOS:** the tray icon, hotkey, taskbar choice and native menus are Windows-only so far
-   (`window/desktop.cpp`, `window/menu.cpp` have empty stand-ins); nothing on macOS was built or
-   run in this round.
+   (`window/desktop.cpp`, `window/menu.cpp` have empty stand-ins); the Probes are Windows-only;
+   nothing on macOS was built or run in the last two rounds.
+
+Done on 11 Nov 2026: the CMake move's phase 3 (the person said to go ahead; no Python is left:
+`cmake-move.md`), Task Manager phases 2 and 3, scrolling in the Task Manager, and big-check
+passes 1 to 3 (what they found is in `STATUS.md`).
 
 Done from MiniMeters' second REA pass (`minimeters.md`), all chosen by the person: resize handles
 between modules, pop-out windows, frame-rate limit, window opacity, tray icon, hide from taskbar,
@@ -71,8 +77,10 @@ engine still computes the bar chart for `sessionscope report`.
 - **Use REA for anything about a shipped binary.** REA (github.com/morluto/rea) is installed as the
   `rea` MCP server, with the `reverse-engineer-anything` skill. To learn how another program does
   something (MiniMeters, a DAW, a plug-in), open its executable with REA and Ghidra, not with
-  `strings`-style dumps: the person explicitly asked for REA. Setup on this machine: portable Node
-  24.22.2, Temurin JDK 21 and Ghidra 12.1.4 in `C:\tools` (REA rejects Ghidra 12.2). Large
+  `strings`-style dumps: the person explicitly asked for REA. Setup on the person's earlier
+  computer: portable Node 24.22.2, Temurin JDK 21 and Ghidra 12.1.4 in `C:\tools` (REA rejects
+  Ghidra 12.2). The current computer (since 11 Nov 2026) has no `C:\tools`: CMake and Ninja come
+  from scoop there, and REA's own tools should be checked with `rea doctor` before relying on them. Large
   executables need a longer Ghidra startup: call `update_analysis_settings` with
   `ghidra.startup_timeout_ms` set to 1800000 before the first query. What REA found in
   MiniMeters is in `minimeters.md` in this folder.
@@ -82,14 +90,17 @@ engine still computes the bar chart for `sessionscope report`.
 - **Commit after each phase**, with a plain message saying what changed and why.
 - **Check what you build:** `cmake --build --preset windows`, then `ctest --preset windows` (every
   test must pass; warnings are errors in our code) and, after plug-in changes,
-  `ctest --preset windows-plugins`. Then look at the HUD with
+  `ctest --preset windows-plugins` (close any DAW first), and after changes to the REAPER
+  scripts or the Probe, `build/engine/sessionscope reaper validate` (a real REAPER with its own
+  settings folder, about five minutes; nothing may rebuild while it runs). Then look at the HUD with
   `build/engine/SessionScopeHUD.exe --demo --screenshot out.png --wait 9000` (add `--vertical`
   for the column layout).
 - The demo has no DAW, so its DAW CPU is a stand-in; say so wherever it matters.
 - **Never touch the person's own `hud.ini`** (`%APPDATA%\SessionScope`) in tests: pass
   `--settings <scratch file>`; screenshot runs don't read or write settings at all. Their settings
   were lost once this way.
-- **Test drags with `--test-drag X1,Y1,X2,Y2`**, not a script-moved mouse: this screen runs at
+- **Test drags with `--test-drag X1,Y1,X2,Y2`** (a click is a drag that goes nowhere) and the
+  mouse wheel with `--test-wheel X,Y,NOTCHES`, not a script-moved mouse: this screen runs at
   200 %, and Windows rescales a non-DPI-aware script's mouse, so it can't aim.
 - **Shell edits mangle backslashes** in this environment's bash heredocs (`\n`, `\x`, `\;`): edit
   files with the Edit/Write tools when the text has backslashes.

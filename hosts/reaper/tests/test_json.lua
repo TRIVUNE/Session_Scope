@@ -1,3 +1,5 @@
+-- lib/json.lua: the JSON writer the scripts use for meta.json, inventories and results.
+
 local json = require('json')
 
 test('objects have sorted keys', function()

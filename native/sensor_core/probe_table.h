@@ -14,8 +14,9 @@
 //
 // The table: a header and SLOTS slots. A probe takes a free slot when it starts and frees it when
 // it stops. Each slot holds:
-//   owner          which probe holds the slot (0 = free)
-//   heartbeat_ns   when it last wrote (a slot whose probe stopped writing for STALE_NS is free)
+//   owner          which probe holds the slot (0 = free): the DAW's process id in the upper half
+//                  of the number, the probe's own number in the lower half
+//   heartbeat_ns   when it last wrote (the HUD stops showing a probe that was silent for STALE_NS)
 //   blocks         how many audio blocks it has timed
 //   cost_ns        total time spent inside the real plug-in
 //   budget_ns      total real-time length of those blocks (frames / sample rate)
@@ -29,6 +30,12 @@
 // step, so the HUD can read them at any moment without stopping the probe. The names change
 // rarely and are guarded by a "sequence counter": the writer makes it odd while writing and even
 // when done; a reader that sees an odd or changed counter just tries again later.
+//
+// When is a slot free to take? When its owner is 0, or when the program that owned it no longer
+// runs (a DAW that crashed never freed its slots). NOT when its probe has merely been silent: a
+// bypassed plug-in, or one in a project that takes long to load, is silent and still alive. (An
+// earlier version handed out slots after five silent seconds; in a real REAPER session two probes
+// then wrote into one slot. Found in the first live test, November 2026.)
 //
 // Header-only: the probe plug-ins and the engine both include this file.
 
@@ -44,7 +51,9 @@
 #endif
 #include <windows.h>
 #else
+#include <cerrno>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -57,7 +66,7 @@ constexpr std::uint64_t MAGIC = 0x53535052'4f424531ull;   // "SSPROBE1"
 constexpr std::uint32_t LAYOUT = 1;
 constexpr std::uint32_t SLOTS = 256;                       // more probes than any session needs
 constexpr std::size_t NAME_BYTES = 64;                     // names are cut to 63 characters
-constexpr std::uint64_t STALE_NS = 5'000'000'000ull;       // 5 s without writing: the slot is free again
+constexpr std::uint64_t STALE_NS = 5'000'000'000ull;       // 5 s without writing: the HUD stops showing the probe
 #ifdef _WIN32
 constexpr const char *TABLE_NAME = "SessionScope_probes_v1";
 #else
@@ -141,6 +150,31 @@ inline Table *open_table(const char *name = TABLE_NAME) {
     return table;
 }
 
+// This program's process id (the number the system gives every running program).
+inline std::uint32_t this_process() {
+#ifdef _WIN32
+    return static_cast<std::uint32_t>(GetCurrentProcessId());
+#else
+    return static_cast<std::uint32_t>(getpid());
+#endif
+}
+
+// Is the program with this process id still running? When the system won't let us look, the
+// answer is yes: better to leave a slot alone than to take one that is in use.
+inline bool process_alive(std::uint32_t process_id) {
+    if (process_id == this_process()) return true;
+#ifdef _WIN32
+    const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+    if (!process) return GetLastError() == ERROR_ACCESS_DENIED;   // "no such process" is the other answer
+    DWORD exit_code = 0;
+    const bool running = GetExitCodeProcess(process, &exit_code) && exit_code == STILL_ACTIVE;
+    CloseHandle(process);
+    return running;
+#else
+    return kill(static_cast<pid_t>(process_id), 0) == 0 || errno == EPERM;   // signal 0: only asks, sends nothing
+#endif
+}
+
 // Copies a name into a slot field, cut to fit, always ending in a zero byte.
 inline void copy_name(char (&field)[NAME_BYTES], const char *text) {
     std::size_t n = 0;
@@ -154,22 +188,25 @@ inline void copy_name(char (&field)[NAME_BYTES], const char *text) {
 // The probe's side. One per probe plug-in instance.
 class Writer {
 public:
-    // `self`: the probe instance (its address makes the id unique). Opens the table; call off the
-    // audio thread (the plug-in's constructor or setup).
+    // `self`: the probe instance. Opens the table; call off the audio thread (the plug-in's
+    // constructor or setup).
     explicit Writer(const void *self, const char *table_name = TABLE_NAME)
-        : id_((reinterpret_cast<std::uintptr_t>(self) ^ now_ns()) | 1), table_(open_table(table_name)) {}   // | 1: never 0 (0 = free)
+        : id_(make_id(self)), table_(open_table(table_name)) {}
     ~Writer() { release(); }
     Writer(const Writer &) = delete;
     Writer &operator=(const Writer &) = delete;
 
-    // Takes a free slot (or one whose probe went silent). Off the audio thread. False if the table
-    // is full or couldn't be opened; the probe then simply doesn't report.
+    // Takes a free slot: one nobody owns, or one whose program no longer runs. Off the audio
+    // thread (it asks the system about other programs). False if the table is full or couldn't
+    // be opened; the probe then simply doesn't report.
     bool claim() {
         if (!table_ || slot_) return slot_ != nullptr;
         const std::uint64_t now = now_ns();
         for (Slot &s : table_->slot) {
             std::uint64_t owner = s.owner.load();
-            const bool free = owner == 0 || now - s.heartbeat_ns.load() > STALE_NS;
+            // Free: no owner; or our own id (left by an earlier program that had our process id
+            // and crashed); or an owner whose program is gone. The process id is the upper half.
+            const bool free = owner == 0 || owner == id_ || !process_alive(static_cast<std::uint32_t>(owner >> 32));
             if (free && s.owner.compare_exchange_strong(owner, id_)) {   // only one probe can win a slot
                 s.heartbeat_ns.store(now);
                 s.blocks.store(0);
@@ -211,13 +248,25 @@ public:
 
     // Frees the slot. Off the audio thread (the plug-in's destructor).
     void release() {
-        if (slot_) slot_->owner.store(0);
+        if (slot_) {
+            std::uint64_t mine = id_;
+            slot_->owner.compare_exchange_strong(mine, 0);   // free it only if it is (still) ours
+        }
         slot_ = nullptr;
     }
 
     bool active() const { return slot_ != nullptr; }
 
 private:
+    // The id that marks a slot as ours: this program's process id in the upper 32 bits (so anyone
+    // can tell whether the owner still runs), and in the lower 32 bits a number from the probe's
+    // address, which no other probe alive in this program shares. Never 0 (0 = free).
+    static std::uint64_t make_id(const void *self) {
+        const auto address = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(self));
+        const auto low = static_cast<std::uint32_t>(address ^ (address >> 32));   // both halves of the address, folded together
+        return (static_cast<std::uint64_t>(this_process()) << 32) | (low ? low : 1u);
+    }
+
     std::uint64_t id_;
     Table *table_;
     Slot *slot_ = nullptr;

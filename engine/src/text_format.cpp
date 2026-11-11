@@ -1,3 +1,6 @@
+// text_format.cpp - number and text formatting for reports (see text_format.h: the rules follow
+// the formatting of the earlier Python analyser, so old and new reports compare letter by letter).
+
 #include "text_format.h"
 
 #include <algorithm>

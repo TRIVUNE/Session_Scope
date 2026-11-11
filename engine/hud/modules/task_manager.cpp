@@ -5,6 +5,8 @@
 // What you see: one row per track (in the DAW's order), with the CPU its plug-ins use together and
 // its worst block in the last second. Click a track to open it and see each plug-in. Click the
 // "CPU" title to sort by CPU instead (busiest first), "Track" to go back to the DAW's order.
+// When there are more rows than fit, turn the mouse wheel over the module to scroll; a thin bar at
+// the right edge shows where you are.
 //
 // What "CPU" means: the share of each audio block's time spent inside the plug-in. 25 % = a quarter
 // of the time the DAW has for a whole block. The tracks together add up to the DAW's audio load;
@@ -76,32 +78,67 @@ public:
             }
         }
 
-        // ---- rows, cut off at the bottom of the box (a later version can scroll)
-        draw->PushClipRect(at(in.x, in.y + row_h), at(in.x + in.w, in.y + in.h), true);
-        float y = in.y + row_h;
+        // ---- scrolling: how tall all rows are together, against the room under the header
+        std::size_t row_count = tracks.size();
         for (const TrackLoad &track : tracks) {
-            if (y > in.y + in.h) break;
+            if (open_.count(track.name)) row_count += track.plugins.size();   // an open track shows its plug-ins too
+        }
+        const float top = in.y + row_h, visible_h = std::max(0.0f, in.h - row_h);
+        const float content_h = static_cast<float>(row_count) * row_h;
+        const float max_scroll = std::max(0.0f, content_h - visible_h);       // 0: everything fits
+        const ImGuiIO &io = ImGui::GetIO();
+        const bool mouse_over = io.MousePos.x >= box.x && io.MousePos.x < box.x + box.w &&
+                                io.MousePos.y >= box.y && io.MousePos.y < box.y + box.h;
+        // One notch of the wheel moves two rows. MouseWheel is positive when turned away from you
+        // (content should move down, so we scroll back up).
+        if (mouse_over && io.MouseWheel != 0) scroll_ -= io.MouseWheel * row_h * 2;
+        scroll_ = std::clamp(scroll_, 0.0f, max_scroll);                      // also pulls back when rows disappear
+
+        // ---- rows, drawn only inside the room under the header
+        const float bottom = in.y + in.h;
+        const auto in_view = [&](float row_y) { return row_y + row_h > top && row_y < bottom; };   // any part of the row shows
+        draw->PushClipRect(at(in.x, top), at(in.x + in.w, bottom), true);
+        float y = top - std::round(scroll_);   // where the first row starts: above `top` once scrolled
+        for (const TrackLoad &track : tracks) {
+            if (y >= bottom) break;            // everything from here on is below the view
             const bool open = open_.count(track.name) > 0;
-            // A small triangle: pointing down when open, right when closed. (Drawn, not typed: the
-            // Inter font has no arrow characters.)
-            const float cx = in.x + pad + 4 * s, cy = y + row_h * 0.5f, t = 3.5f * s;
-            if (open) draw->AddTriangleFilled(at(cx - t, cy - t * 0.6f), at(cx + t, cy - t * 0.6f), at(cx, cy + t * 0.8f), colour::TEXT);
-            else draw->AddTriangleFilled(at(cx - t * 0.6f, cy - t), at(cx + t * 0.8f, cy), at(cx - t * 0.6f, cy + t), colour::TEXT);
-            row(draw, in.x + 12 * s, y, row_h, pad, track.name, colour::TEXT, track.cpu, track.peak, cpu_x, cpu_w, peak_x, peak_w);
-            if (clicked(in.x, y, in.w, row_h)) {   // open or close the track
-                if (open) open_.erase(track.name);
-                else open_.insert(track.name);
+            if (in_view(y)) {
+                // A small triangle: pointing down when open, right when closed. (Drawn, not typed: the
+                // Inter font has no arrow characters.)
+                const float cx = in.x + pad + 4 * s, cy = y + row_h * 0.5f, t = 3.5f * s;
+                if (open) draw->AddTriangleFilled(at(cx - t, cy - t * 0.6f), at(cx + t, cy - t * 0.6f), at(cx, cy + t * 0.8f), colour::TEXT);
+                else draw->AddTriangleFilled(at(cx - t * 0.6f, cy - t), at(cx + t * 0.8f, cy), at(cx - t * 0.6f, cy + t), colour::TEXT);
+                row(draw, in.x + 12 * s, y, row_h, pad, track.name, colour::TEXT, track.cpu, track.peak, cpu_x, cpu_w, peak_x, peak_w);
+                // Open or close the track. Only the part of the row that shows can be clicked: the
+                // part scrolled under the header belongs to the header.
+                const float click_y = std::max(y, top);
+                if (clicked(in.x, click_y, in.w, y + row_h - click_y)) {
+                    if (open) open_.erase(track.name);
+                    else open_.insert(track.name);
+                }
             }
             y += row_h;
             if (!open) continue;
             for (const PluginLoad &plugin : track.plugins) {
-                if (y > in.y + in.h) break;
-                row(draw, in.x + 26 * s, y, row_h, pad, plugin.name, colour::TEXT_QUIET, plugin.cpu, plugin.peak,
-                    cpu_x, cpu_w, peak_x, peak_w);
+                if (y >= bottom) break;
+                if (in_view(y)) {
+                    row(draw, in.x + 26 * s, y, row_h, pad, plugin.name, colour::TEXT_QUIET, plugin.cpu, plugin.peak,
+                        cpu_x, cpu_w, peak_x, peak_w);
+                }
                 y += row_h;
             }
         }
         draw->PopClipRect();
+
+        // ---- the scroll bar: only when there is something to scroll. A thin grey track with a
+        // darker piece whose length says how much of the list is in view, and whose place says where.
+        if (max_scroll > 0 && visible_h > 0) {
+            const float bar_w = std::max(2.0f, std::round(3 * s)), bar_x = in.x + in.w - bar_w;
+            const float thumb_h = std::max(12 * s, visible_h * visible_h / content_h);
+            const float thumb_y = top + (visible_h - thumb_h) * (scroll_ / max_scroll);
+            draw->AddRectFilled(at(bar_x, top), at(bar_x + bar_w, top + visible_h), colour::HOVER);
+            draw->AddRectFilled(at(bar_x, thumb_y), at(bar_x + bar_w, thumb_y + thumb_h), colour::TEXT_QUIET);
+        }
     }
 
 private:
@@ -145,6 +182,7 @@ private:
 
     const Fonts &fonts_;
     bool by_cpu_ = false;               // sort by CPU instead of the DAW's order
+    float scroll_ = 0;                  // how far the rows are scrolled up, in pixels (0 = the top)
     std::set<std::string> open_;        // tracks opened to show their plug-ins
 };
 

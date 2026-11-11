@@ -6,6 +6,8 @@
 #   SessionScope.vst3.dll     the VST3 sensor (installed as SessionScope.vst3/Contents/x86_64-win/...)
 #   SessionScope.vst3/...     the same, as a ready VST3 bundle folder (what the validator checks)
 #   SessionScope.clap         the CLAP sensor (a CLAP plug-in on Windows is a DLL named .clap)
+#   SessionScopeProbe.vst3... the VST3 Probe: holds one VST3 effect and times it (vst3_probe/)
+#   SessionScopeProbe.clap    the CLAP Probe: a timed twin of every installed CLAP plug-in (clap_probe/)
 #   reaper_sessionscope.dll   the optional REAPER extension (REAPER's own CPU per block)
 # macOS (into build/native/mac/), each a universal bundle (Apple silicon and Intel), signed ad hoc:
 #   SessionScope.vst3, SessionScope.clap, SessionScope.component (Audio Unit)
@@ -14,6 +16,8 @@
 #   vst3_validator    Steinberg's official validator (built here from the VST3 SDK)
 #   clap_validator    the official clap-validator (downloaded, pinned)
 #   clap_host         a small host that loads the CLAP sensor and reads its records back
+#   vst3_probe_*      the validator on the VST3 Probe, and two small hosts that run audio through it
+#   clap_probe_*      clap-validator on the CLAP Probe (twinning our sensor), and a small host
 # They use the real shared memory, so close any DAW that has the sensor loaded first.
 #
 # Third-party code, fetched once into .toolchain/ (cmake/fetch.cmake), pinned:
@@ -139,7 +143,10 @@ set_target_properties(vst3_validator PROPERTIES OUTPUT_NAME validator RUNTIME_OU
 add_test(NAME vst3_validator COMMAND vst3_validator "${NATIVE_OUT}/SessionScope.vst3")
 set_tests_properties(vst3_validator PROPERTIES LABELS plugins PASS_REGULAR_EXPRESSION "Result: [0-9]+ tests passed, 0 tests failed")
 
-# ---- the VST3 Probe (effect wrapper with a Windows editor)
+# ---- the VST3 Probe: a plug-in that holds another VST3 effect and times it (Windows picker window)
+# It is a plug-in (the SDK's plug-in files) and a host at once (the SDK's hosting files, built
+# once above as vst3_host_sdk for the validator too). A file in both lists is taken from the
+# hosting library only, or the linker would see it twice.
 set(probe_plugin_files ${vst3_plugin_files})
 list(REMOVE_ITEM probe_plugin_files ${sdk_files})
 add_library(vst3_probe SHARED vst3_probe/sessionscope_probe.cpp vst3_probe/hosted_vst3.cpp
@@ -180,10 +187,24 @@ fetch_from_zip(clap-validator
                d935c3af0a45c3911ea2e900f4aa5d6709dac82bb485f0c4ce28648ab2cd0c10 clap-validator.exe)
 # Its JSON report has one "code" per test: "success", "skipped" (a feature the sensor doesn't have),
 # or a failure. The check passes if something succeeded and nothing failed or crashed.
-add_test(NAME clap_validator COMMAND "${TOOLCHAIN_DIR}/clap-validator/clap-validator.exe" validate --json "$<TARGET_FILE:clap_sensor>")
-set_tests_properties(clap_validator PROPERTIES LABELS plugins
-                     PASS_REGULAR_EXPRESSION "\"code\": *\"success\""
-                     FAIL_REGULAR_EXPRESSION "\"code\": *\"(failed|crashed|warning)\"")
+#
+# The denormals test runs on its own, and there a warning is allowed. It times the plug-in on
+# ordinary numbers and on "denormals" (numbers so close to zero that some processors compute with
+# them slowly) and warns when the second is much slower. Our plug-ins only copy the audio, never
+# calculate with it, and one block takes well under a microsecond, so that comparison measures the
+# clock's own noise: on some computers it warns on every run. A real failure still fails.
+set(CLAP_VALIDATOR "${TOOLCHAIN_DIR}/clap-validator/clap-validator.exe")
+function(add_clap_validator_tests name plugin_file)
+  add_test(NAME ${name} COMMAND "${CLAP_VALIDATOR}" validate --json -x process-audio-denormals "${plugin_file}")
+  set_tests_properties(${name} PROPERTIES LABELS plugins
+                       PASS_REGULAR_EXPRESSION "\"code\": *\"success\""
+                       FAIL_REGULAR_EXPRESSION "\"code\": *\"(failed|crashed|warning)\"")
+  add_test(NAME ${name}_denormals COMMAND "${CLAP_VALIDATOR}" validate --json -t process-audio-denormals "${plugin_file}")
+  set_tests_properties(${name}_denormals PROPERTIES LABELS plugins
+                       PASS_REGULAR_EXPRESSION "\"code\": *\"(success|warning)\""
+                       FAIL_REGULAR_EXPRESSION "\"code\": *\"(failed|crashed)\"")
+endfunction()
+add_clap_validator_tests(clap_validator "$<TARGET_FILE:clap_sensor>")
 
 add_executable(test_clap_sensor clap_sensor/test_clap_sensor.cpp)
 target_include_directories(test_clap_sensor SYSTEM PRIVATE "${CLAP_INCLUDE}")
@@ -191,3 +212,26 @@ target_compile_options(test_clap_sensor PRIVATE -Wall -Wextra -Werror)
 set_target_properties(test_clap_sensor PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
 add_test(NAME clap_host COMMAND test_clap_sensor "$<TARGET_FILE:clap_sensor>")
 set_tests_properties(clap_host PROPERTIES LABELS plugins)
+
+# ---- the CLAP Probe: shows the DAW a timed "twin" of every installed CLAP plug-in
+add_library(clap_probe SHARED clap_probe/sessionscope_clap_probe.cpp)
+target_include_directories(clap_probe SYSTEM PRIVATE "${CLAP_INCLUDE}")
+target_compile_definitions(clap_probe PRIVATE NDEBUG)
+target_compile_options(clap_probe PRIVATE -Wall -Wextra -Werror)
+set_target_properties(clap_probe PROPERTIES PREFIX "" OUTPUT_NAME "SessionScopeProbe" SUFFIX ".clap"
+                                            RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
+
+# Its checks. The Probe makes twins of the plug-ins it finds in the standard CLAP folders; for the
+# checks SESSIONSCOPE_PROBE_CLAP_PATH points it at build/native only, where it finds exactly one
+# plug-in to twin: our own CLAP sensor. So clap-validator validates "the sensor, probed", and the
+# checks don't depend on (or load) whatever else is installed on the computer.
+add_clap_validator_tests(clap_probe_validator "$<TARGET_FILE:clap_probe>")
+add_executable(test_clap_probe clap_probe/test_clap_probe.cpp)
+target_include_directories(test_clap_probe SYSTEM PRIVATE "${CLAP_INCLUDE}")
+target_compile_options(test_clap_probe PRIVATE -Wall -Wextra -Werror)
+set_target_properties(test_clap_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
+add_dependencies(test_clap_probe clap_probe clap_sensor)
+add_test(NAME clap_probe_host COMMAND test_clap_probe "$<TARGET_FILE:clap_probe>")
+set_tests_properties(clap_probe_host PROPERTIES LABELS plugins)
+set_tests_properties(clap_probe_validator clap_probe_validator_denormals clap_probe_host PROPERTIES
+                     ENVIRONMENT "SESSIONSCOPE_PROBE_CLAP_PATH=${NATIVE_OUT}")

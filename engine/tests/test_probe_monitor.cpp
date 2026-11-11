@@ -5,7 +5,9 @@
 #include "probe_table.h"
 #include "test_support.h"
 
+#include <memory>
 #include <string>
+#include <vector>
 
 using namespace sessionscope;
 
@@ -62,5 +64,51 @@ int main() {
 
     // Zero-sample blocks (VST3 parameter flushes) don't count.
     synth.record_block(123, 0);
+
+    // ---- who may take a slot ---------------------------------------------------------------------
+    // (reverb gave its slot back above; synth and drums hold theirs: 2 of the 256 are taken)
+    probes::Table *table = probes::open_table(name.c_str());
+    CHECK(table != nullptr);
+    if (!table) return finish_tests();
+
+    // A probe that has been silent for a long time (a bypassed plug-in, a project still loading)
+    // keeps its slot. Make synth and drums look silent since the computer started:
+    probes::Slot *free_slot = nullptr;
+    for (probes::Slot &slot : table->slot) {
+        if (slot.owner.load() != 0) slot.heartbeat_ns.store(0);
+        else if (!free_slot) free_slot = &slot;
+    }
+    // A slot left behind by a program that no longer runs (process id 4294967280: no such program)
+    // is free to take.
+    CHECK(free_slot != nullptr);
+    if (free_slot) free_slot->owner.store((std::uint64_t{0xFFFFFFF0u} << 32) | 5);
+    CHECK(!probes::process_alive(0xFFFFFFF0u));
+    CHECK(probes::process_alive(probes::this_process()));
+
+    // Now take slots until the table is full: every slot but synth's and drums' must be handed
+    // out, the dead program's among them, and never one twice.
+    static int addresses[probes::SLOTS + 1];   // each writer needs an address of its own for its id
+    std::vector<std::unique_ptr<probes::Writer>> writers;
+    for (std::uint32_t i = 0; i <= probes::SLOTS; ++i) {
+        auto writer = std::make_unique<probes::Writer>(&addresses[i], name.c_str());
+        if (!writer->claim()) break;
+        writers.push_back(std::move(writer));
+    }
+    CHECK(writers.size() == probes::SLOTS - 2);
+    CHECK(free_slot && static_cast<std::uint32_t>(free_slot->owner.load() >> 32) == probes::this_process());   // the dead one was taken
+    // synth and drums still write into slots that are theirs alone: their blocks keep counting from where they were.
+    synth.set_names("Lead synth", "Serum", 2, 0);
+    drums.set_names("Drums", "Kontakt", 1, 0);
+    int serum_slots = 0, kontakt_slots = 0;
+    for (const probes::Slot &slot : table->slot) {
+        if (std::string(slot.plugin) == "Serum") ++serum_slots;
+        if (std::string(slot.plugin) == "Kontakt") ++kontakt_slots;
+    }
+    CHECK(serum_slots == 1 && kontakt_slots == 1);
+    // Giving slots back makes room again.
+    writers.pop_back();
+    int late = 0;
+    probes::Writer latecomer(&late, name.c_str());
+    CHECK(latecomer.claim());
     return finish_tests();
 }

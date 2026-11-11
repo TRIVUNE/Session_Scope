@@ -2,13 +2,14 @@
 // main.cpp - where the HUD program starts
 // =================================================================================================
 //
-// Builds into build/engine/SessionScopeHUD.exe (tools/build_engine.py).
+// Builds into build/engine/SessionScopeHUD.exe (engine/CMakeLists.txt).
 //
 //   SessionScopeHUD                      live: shows the DAW where the sensor plug-in plays
 //   SessionScopeHUD --demo               generated data, no DAW needed
 //   SessionScopeHUD --replay FOLDER      plays back a recording
 //   add --screenshot OUT.png [--wait MS] [--vertical]  to save one frame after MS milliseconds and quit
 //   add --test-drag X1,Y1,X2,Y2 to a screenshot run to play a mouse drag in (for testing)
+//   add --test-wheel X,Y,NOTCHES to turn the mouse wheel at a point (for testing; after the drag)
 //   --settings FILE   use FILE instead of your hud.ini (tests use this so they never touch yours)
 //
 // This file only reads the command line; hud_app.cpp does the rest.
@@ -63,10 +64,21 @@ HudOptions parse_args(int argc, char **argv) {
             }
             options.test_drag = drag;
         }
+        else if (arg == "--test-wheel" && has_value) {
+            // Three numbers separated by commas: "640,80,-3".
+            std::array<float, 3> wheel{};
+            const char *text = argv[++i];
+            char *end = nullptr;
+            for (float &number : wheel) {
+                number = std::strtof(text, &end);
+                text = (*end == ',') ? end + 1 : end;
+            }
+            options.test_wheel = wheel;
+        }
         else {
             sessionscope::show_error("Unknown or incomplete argument: " + arg +
                                      "\n\nUsage: SessionScopeHUD [--replay FOLDER] [--demo] [--vertical] "
-                                     "[--screenshot OUT.png] [--wait MS] [--test-drag X1,Y1,X2,Y2] [--settings FILE]");
+                                     "[--screenshot OUT.png] [--wait MS] [--test-drag X1,Y1,X2,Y2] [--test-wheel X,Y,NOTCHES] [--settings FILE]");
             std::exit(2);
         }
     }

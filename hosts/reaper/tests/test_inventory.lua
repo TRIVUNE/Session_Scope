@@ -1,3 +1,5 @@
+-- lib/inventory.lua: tracks, FX, containers, input FX and declared delay, against the fake REAPER.
+
 local inventory = require('inventory')
 local json = require('json')
 local fake = require('fake_reaper')

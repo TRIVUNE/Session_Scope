@@ -6,7 +6,7 @@
 | `vst3_sensor/` | `SessionScope.vst3`: stereo pass-through effect for the master track; publishes one record per block into the shared-memory ring `SessionScope_v2` (layout 2: adds the host's bar start) that the HUD window reads | **built and verified** in REAPER 7.77 |
 | `clap_sensor/` | `SessionScope.clap`: the same sensor for CLAP hosts; `test_clap_sensor.cpp` is a small host that checks the records it writes | **built and validated** with `clap-validator` 0.4.1 |
 | `vst3_probe/` | `SessionScopeProbe.vst3` (Windows): loads one VST3 effect inside itself, passes everything through and times every block into the shared table `SessionScope_probes_v1` (`sensor_core/probe_table.h`) for the HUD's Task Manager. `hosted_vst3.*` loads and times; `sessionscope_probe.cpp` is the plug-in and its picker window | **built and checked** in REAPER 7.83 with third-party effects; Steinberg's validator passes (47/47); two test hosts |
-| `clap_probe/` | `SessionScopeProbe.clap` (Windows): shows the DAW a timed twin of every installed CLAP plug-in, writing into the same table | **built**; `clap-validator` and a test host pass (twinning our own CLAP sensor); not yet tried in a DAW |
+| `clap_probe/` | `SessionScopeProbe.clap` (Windows): shows the DAW a timed twin of every installed CLAP plug-in, writing into the same table | **built and checked** in REAPER 7.83 with a third-party CLAP plug-in; `clap-validator` and a test host pass (twinning our own CLAP sensor) |
 | `../hosts/reaper/third_party/reaper-sdk/` | `reaper_plugin.h` from github.com/justinfrankel/reaper-sdk at `b2ca1ec` (zlib licence, notice kept in the file) | |
 
 The sensor exists as VST3 and as CLAP; both are thin wrappers around `sensor_core/sensor_ring.h`,
