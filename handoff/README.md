@@ -1,7 +1,33 @@
 # Handoff: where the HUD is going
 
 For the next AI agent working on this repository. Read this first, then `README.md` and `guide.md`.
-Last updated 2026-11-11.
+Last updated 2026-11-12.
+
+## The direction changed on 12 Nov 2026
+
+The person tested the plug-ins in Ableton Live for the first time: ten of ten hosted effects
+crashed Live, no instrument Probe exists, and the state-migration workflow was named a
+dealbreaker. The product direction is now the **offline session analyzer** — read the project
+file, measure every plug-in in SessionScope's own offline host (separate process, the plug-in's
+own saved state, the project's own MIDI and audio), report ranked costs and visuals. Decision
+record: **`docs/decisions/0006-offline-session-analyzer.md`**; the evening's findings:
+`docs/research/Live-first-look.md`; prior-art scouting and the DRM defense:
+`docs/research/offline-analyzer-scouting.md`. Two consequences for the code in this handoff:
+
+- **The HUD is re-targeted as the analyzer app's interface.** Its live-monitor role (watching
+  a running DAW) is retired; its engine — the Direct3D 11 rendering, the module framework,
+  settings, and trace replay support — is kept and becomes the app's HUD: the weight map, the
+  suspects and waste lists, trace playback, the what-if comparisons. The S2 Dropouts fix
+  (a)+(b) is paused with the live monitor; revisit if it ever returns.
+- **The Probe is triaged to the code the app needs.** The offline hosting core
+  (`native/vst3_probe/hosted_vst3.*`) and the per-block timing it already carries migrate from
+  "VST plug-in" to the app: the same hosting and timing, now inside `sessionscope bench`. The
+  VST3 plug-in shell (picker, editor), the CLAP probe and twins, the REAPER *Probe all FX*
+  scripts and the sensor retire from the product and the build (kept in the tree and history
+  as research).
+
+The rest of this handoff still describes the HUD as it is today; read it as the engine that
+will be re-pointed at the analyzer's data.
 
 ## The direction
 
