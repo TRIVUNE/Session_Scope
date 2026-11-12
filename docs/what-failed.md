@@ -1,6 +1,6 @@
 # What failed, and why
 
-- Written 2026-11-12, covering 27 Oct to 12 Nov 2026.
+- Written 2026-11-12, covering 27 Oct to 12 Nov 2026, the end of the project (decision 0007).
 - For anyone joining the project: the ideas we tried that did not work, why they did not, and
   what we did instead. Read this before you suggest one of them again.
 - Every point links to the record that holds the numbers. This page only explains them.
@@ -19,6 +19,9 @@
    keep each plug-in isolated, so any plan that needs one plug-in to control the session fails.
 5. **The measuring tool must cost very little.** It runs on the computer whose audio deadline
    it is measuring.
+6. **The product itself did not stand** (decision 0007, the last section below). Every approach
+   met at most three of four requirements, and the four can't all be met: per-instance numbers
+   in a running session exist only inside the DAW.
 
 ## Measurement ideas that failed
 
@@ -182,8 +185,49 @@ Record: [`decisions/0006-offline-session-analyzer.md`](decisions/0006-offline-se
 | Shell heredocs to write files | Backslashes (`\n`, `\x`) get mangled; again on 12 Nov in a Lua script (REAPER showed "invalid escape sequence") | Write files with the editor tools, always |
 | REA with Ghidra 12.2 | REA rejects it; large executables timed out at Ghidra's default start-up limit | Ghidra 12.1.4, start-up timeout raised to 30 minutes |
 
+## The last failure: the product (12 Nov 2026)
+
+The offline bench worked. It loaded all ten test plug-ins headless, copy-protected ones included,
+and gave each one the person's exact settings from a REAPER project and from an Ableton Live set
+(13,455 of 13,455 parameters equal in both; `research/rpp-state.md`, `research/als-state.md`).
+It showed what no DAW meter shows: with the person's settings Serum 2 cost 42.6 % of the block
+and Ozone 12 32.1 %, against 3–4 % and idle at their defaults. Then the product question was
+asked again, and it did not survive. Record: [`decisions/0007-stop.md`](decisions/0007-stop.md).
+
+**The four requirements.** The person set them over two days, and each is reasonable:
+
+1. **No DAW dependence**: no list of supported DAWs (the Probe's lesson).
+2. **No carrying settings over**: "if I have to migrate presets, then no."
+3. **Nothing of ours inside the DAW**: a tool that can crash a session is out.
+4. **More than the DAW already shows**: REAPER's Performance Meter is exact per instance.
+
+**How each idea fell, in the order they came up:**
+
+- **Project readers** (built, worked): one reader per DAW is a support list again (1). They
+  are small and can't crash a session, but "works with REAPER and Live" is still a list.
+- **Our own plug-in rack**, where you open your plug-ins in SessionScope and pick presets in
+  their own windows: the person saw at once that this is the Probe's dealbreaker again (2).
+  The settings move by hand, just to a different place.
+- **An outside sampler** watching the DAW process: it meets 1–3 but sees only plug-in *files*,
+  not instances. Three Serums are one row, and REAPER already does better (4).
+- **A timing hook inside the DAW**: per instance in any DAW, but it is our code in the DAW (3),
+  and copy-protected plug-ins may see it as tampering.
+
+**Why no fifth idea fixes it:** which *instance* of a plug-in is running is known only inside
+the DAW process. Live, per-instance numbers need the DAW's own meter (4) or code inside the DAW
+(3). Measuring outside the session needs the person's settings, which live only in per-DAW
+project files (1) or must be entered again (2).
+
+**What we should have done earlier:** written the requirements down on day one and tested every
+idea against all of them before building it. We built for weeks before the first test outside
+REAPER, and the requirements only became clear one failure at a time. And we should have
+compared against what the DAWs already show (REAPER's per-instance meter) before deciding
+SessionScope's measurement would be the selling point.
+
 ## How to avoid repeating these
 
+- **Before building, write down what the product must do, and check each idea against all of
+  it**, including "is this more than the DAW already does?"
 - Before trusting a new measurement, test it against a **known load** (F7a/F7b), on **real
   hardware**, and in **more than one host**.
 - Write down the denominator of every percentage.

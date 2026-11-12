@@ -1,5 +1,10 @@
 # SessionScope: status and next steps
 
+> **Paused, 12 November 2026.** SessionScope stopped as a product:
+> [decision 0007](docs/decisions/0007-stop.md), reasoning in [what failed](docs/what-failed.md).
+> The open items below are cancelled unless the question is reopened; reusable parts are listed
+> in [the handoff](handoff/README.md).
+
 Last updated 12 November 2026. The working plan and next steps in one place: [guide.md](guide.md). Phases follow the blueprint's build plan (P0 → P7, gate G1).
 Where things are in the repository: see the table in [README.md](README.md).
 

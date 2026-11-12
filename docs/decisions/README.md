@@ -23,3 +23,5 @@ made while building. A record is never edited to say something else later: a new
 | [0003](0003-native-next.md) | Next native pieces: REAPER audio-hook extension, then the CLAP/VST3 sensor | extension accepted; VST3 and CLAP sensors built |
 | [0004](0004-trace-format.md) | Trace format v1: CSV plus meta.json, one folder per recording | accepted |
 | [0005](0005-daw-neutral-native.md) | Any DAW, native code: one sensor in every plug-in format, a C++ engine and HUD | accepted |
+| [0006](0006-offline-session-analyzer.md) | The offline session analyzer becomes the product | superseded by 0007 |
+| [0007](0007-stop.md) | Stop: SessionScope does not stand as a product | accepted |

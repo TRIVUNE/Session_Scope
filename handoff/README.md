@@ -3,6 +3,28 @@
 For the next AI agent working on this repository. Read this first, then `README.md` and `guide.md`.
 Last updated 2026-11-12.
 
+## The project is paused (12 Nov 2026, evening)
+
+**SessionScope stopped as a product.** Decision record: **`docs/decisions/0007-stop.md`**; the
+reasoning and every failure on the way: **`docs/what-failed.md`**. In short: the person's four
+requirements (no DAW dependence, no carrying settings over, nothing of ours inside the DAW, more
+than the DAW already shows) cannot all be met, because per-instance plug-in numbers in a running
+session exist only inside the DAW. Every approach built or discussed met at most three.
+
+**Do not resume product work** (calibration, more project readers, the sampler, the HUD
+re-targeting) unless the person reopens the question. Nothing was deleted.
+
+**Reusable parts**, each built, tested and documented:
+
+| Part | Where | What it does |
+| --- | --- | --- |
+| Offline bench | `native/bench/bench_host.cpp`, `engine/src/bench_runner.*`, `sessionscope bench` | Hosts any VST3 plug-in out of process (job object, watchdog, crash and hang reports), times every block, checks the plug-in really processes, loads factory programs, `.vstpreset`s or saved states, finds plug-ins by id (cached scan) |
+| Project state readers | `engine/src/rpp_reader.*`, `als_reader.*`, `inflate.*` | Every VST3 plug-in's saved state out of a REAPER project or an Ableton Live set; proven exact (`docs/research/rpp-state.md`, `als-state.md`) |
+| HUD engine | `engine/hud/` | Direct3D 11 + DirectComposition strip of modules, MiniMeters-smooth |
+| Sensors, extension, tests | `native/`, `hosts/reaper/` | VST3/CLAP/AU sensors, the REAPER real-time CPU extension, validators, an isolated-REAPER test harness |
+
+Everything below describes the project as it was before the stop.
+
 ## The direction changed on 12 Nov 2026
 
 The person tested the plug-ins in Ableton Live for the first time: ten of ten hosted effects
