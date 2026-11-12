@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 
+#include "bench_runner.h"
 #include "install.h"
 #include "json.h"
 #include "probe_monitor.h"
@@ -40,6 +41,9 @@ constexpr const char *USAGE =
     "                       [--truncate] [--no-host]\n"
     "                       write a synthetic trace\n"
     "  sessionscope probes [--json]                     CPU per track and plug-in, from the SessionScope Probes\n"
+    "  sessionscope bench PLUGIN.vst3... [--class NAME] [--preset FILE] [--rate HZ] [--block N]\n"
+    "                       [--seconds N] [--timeout N] [--out DIR] [--json]\n"
+    "                       time plug-ins offline, each in its own process (Windows)\n"
     "  sessionscope install [--uninstall] [--from DIR]  copy the built plug-ins to where DAWs look\n"
     "  sessionscope reaper install|uninstall|validate   the REAPER scripts and the validation run\n"
     "  sessionscope --version\n"
@@ -345,6 +349,111 @@ int report_command(int argc, char *argv[]) {
     return 0;
 }
 
+// The offline bench (decision 0006): every plug-in named on the command line is loaded in its own
+// bench host process (bench_runner.h), timed, and checked for really processing. Prints one line
+// per plug-in; --json prints the hosts' results as they wrote them, plus how each run ended.
+// Times are shown only for plug-ins that passed the engagement check: a plug-in that did nothing
+// gets no number (docs/what-failed.md: a wrong number that looks right is the worst result).
+int bench_command(int argc, char *argv[]) {
+    BenchRequest request;
+    std::vector<fs::path> plugins;
+    fs::path out = fs::temp_directory_path() / "sessionscope-bench";
+    bool json = false;
+    for (int i = 2; i < argc; ++i) {
+        const std::string option = argv[i];
+        const bool has_value = i + 1 < argc;
+        try {
+            if (option == "--json") json = true;
+            else if (option == "--class" && has_value) request.class_name = argv[++i];
+            else if (option == "--preset" && has_value) request.preset = fs::u8path(argv[++i]);
+            else if (option == "--rate" && has_value) request.rate = std::stod(argv[++i]);
+            else if (option == "--block" && has_value) request.block = std::stoi(argv[++i]);
+            else if (option == "--seconds" && has_value) request.seconds = std::stod(argv[++i]);
+            else if (option == "--timeout" && has_value) request.timeout_seconds = std::stod(argv[++i]);
+            else if (option == "--out" && has_value) out = fs::u8path(argv[++i]);
+            else if (option.rfind("--", 0) == 0) {
+                std::fprintf(stderr, "Unknown option: %s\n%s", option.c_str(), USAGE);
+                return 2;
+            } else plugins.push_back(fs::u8path(option));
+        } catch (const std::exception &) {
+            std::fprintf(stderr, "Not a number after %s\n", option.c_str());
+            return 2;
+        }
+    }
+    if (plugins.empty()) {
+        std::fprintf(stderr, "Name at least one .vst3 file.\n%s", USAGE);
+        return 2;
+    }
+    if (plugins.size() > 1 && !request.preset.empty()) {
+        std::fprintf(stderr, "--preset belongs to one plug-in: bench one plug-in at a time with it.\n");
+        return 2;
+    }
+    const fs::path host = bench_host_near_program();
+    if (host.empty() || !fs::exists(host)) {
+        std::fprintf(stderr, "Can't find the bench host (build/native/sessionscope_bench_host.exe). Build first.\n");
+        return 1;
+    }
+
+    if (!json) {
+        std::printf("Offline bench: %g Hz, %d-sample blocks (%.2f ms), %g s each. Share = time in the plug-in / block length.\n\n",
+                    request.rate, request.block, request.block * 1000.0 / request.rate, request.seconds);
+        std::printf("%-30s %-10s %-20s %8s %8s %8s %8s\n", "Plug-in", "Kind", "Check", "Mean", "p99", "Max", "Mean us");
+    }
+    std::vector<JsonValue> results;
+    for (std::size_t n = 0; n < plugins.size(); ++n) {
+        request.plugin = plugins[n];
+        const std::string tag = std::to_string(n + 1) + "-" + plugins[n].stem().u8string();
+        const BenchRun run = run_bench(host, request, out, tag);
+        const std::optional<JsonValue> result = parse_json(run.result_json);
+        const JsonValue none;
+        const JsonValue &r = result ? *result : none;
+
+        if (json) {
+            results.emplace_back(std::vector<std::pair<std::string, JsonValue>>{
+                {"plugin", JsonValue(plugins[n].u8string())},
+                {"outcome", JsonValue(run.outcome)},
+                {"exit_code", JsonValue(static_cast<double>(run.exit_code))},
+                {"last_stage", JsonValue(run.last_stage)},
+                {"log", JsonValue(run.log.u8string())},
+                {"result", r}});
+            continue;
+        }
+
+        std::string name = r["name"].is_string() ? r["name"].text() : plugins[n].stem().u8string();
+        const std::string kind = r["kind"].is_string() ? r["kind"].text() : "";
+        std::string check;
+        if (run.outcome == "timed out") check = "timed out at " + run.last_stage;
+        else if (run.outcome == "could not start") check = "not started: " + run.last_stage;
+        else if (r["status"].is_string() && r["status"].text() == "failed") check = "failed: " + r["error"].text();
+        else if (!r["engagement"].is_string()) {
+            char code[16];
+            std::snprintf(code, sizeof code, "0x%08lX", run.exit_code);
+            check = "crashed at " + run.last_stage + " (" + code + ")";
+        } else {
+            check = r["engagement"].text();
+            // It passed the sound through at the settings it was given and changed it only once
+            // its parameters were moved: it runs, but the times are of those idle settings.
+            if (check == "engaged-after-nudge") check = "runs, idle settings";
+            if (run.outcome == "crashed") check += ", crashed on unload";
+        }
+        const bool engaged = r["engagement"].is_string() && r["engagement"].text().rfind("engaged", 0) == 0;
+        if (engaged) {
+            const JsonValue &share = r["share_of_block"];
+            std::printf("%-30.30s %-10s %-20.20s %7.2f%% %7.2f%% %7.2f%% %8.1f\n", name.c_str(), kind.c_str(), check.c_str(),
+                        share["mean"].number() * 100, share["p99"].number() * 100, share["max"].number() * 100,
+                        r["time_us"]["mean"].number());
+        } else {
+            std::printf("%-30.30s %-10s %s\n", name.c_str(), kind.c_str(), check.c_str());
+        }
+    }
+    if (json) {
+        std::printf("%s\n", json_text(JsonValue(std::move(results)), 2).c_str());
+    } else {
+        std::printf("\nResults and logs: %s\n", out.u8string().c_str());
+    }
+    return 0;
+}
+
 // What the HUD's Task Manager shows, as text: every running SessionScope Probe, grouped by track,
 // with the share of the audio block's time its plug-in used over one second. Watches the probes'
 // shared table for that second, then prints. --json prints the same as data, for scripts.
@@ -416,6 +525,7 @@ int main(int argc, char *argv[]) {
         if (command == "report") return report_command(argc, argv);
         if (command == "simulate") return simulate_command(argc, argv);
         if (command == "probes") return probes_command(argc, argv);
+        if (command == "bench") return bench_command(argc, argv);
         if (command == "install") return install_command(argc, argv);
         if (command == "reaper") return reaper_command(argc, argv);
         if (command == "--version") {

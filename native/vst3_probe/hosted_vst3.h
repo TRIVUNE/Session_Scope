@@ -24,6 +24,7 @@
 #include "public.sdk/source/vst/hosting/plugprovider.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +42,19 @@ public:
     // the main (user interface) thread, before any audio. False, with a reason in `error`, if the
     // file can't be opened, the effect isn't in it, or it won't start. One effect per object.
     bool load(const std::string& path, const VST3::UID& class_id, std::string& error);
+
+    // The same, but picks the plug-in by its name; an empty name takes the first plug-in in the
+    // file. Instruments are allowed here (the bench measures them; the Probe uses load() and
+    // checks for instruments itself).
+    bool load_by_name(const std::string& path, const std::string& name, std::string& error);
+
+    // What the factory said about the loaded plug-in: its name, its sub-categories ("Fx|Reverb",
+    // "Instrument|Synth"), its vendor and its version. Empty before load().
+    const std::string& name() const { return plugin_name_; }
+    const std::string& sub_categories() const { return sub_categories_; }
+    const std::string& vendor() const { return vendor_; }
+    const std::string& version() const { return version_; }
+    const VST3::UID& class_id() const { return class_id_; }   // a saved preset names the plug-in by this
 
     // The track the Probe sits on, as the DAW told us (name, and position counted from 0; -1 if
     // unknown). The HUD groups plug-ins by this name. Main thread; may be called before load().
@@ -69,6 +83,9 @@ public:
 
 private:
     class Provider;                                   // PlugProvider with setupPlugin() made callable
+    // Both load()s: opens the file and loads the first audio plug-in in it that `wanted` accepts.
+    bool load_matching(const std::string& path, std::string& error,
+                       const std::function<bool(const VST3::Hosting::ClassInfo&)>& wanted);
     void publish_names();                             // writes track and plug-in name into the table
     void count_buses();                               // sizes the two padded lists below to the effect's audio buses
 
@@ -78,6 +95,8 @@ private:
     Steinberg::IPtr<Steinberg::Vst::IAudioProcessor> processor_;   // the component's audio interface
     probes::Writer writer_;                           // this probe's slot in the shared table
     std::string plugin_name_;                         // the effect's name, for the table
+    std::string sub_categories_, vendor_, version_;   // from the factory, for the bench's report
+    VST3::UID class_id_;                              // the loaded plug-in's id
     std::string track_name_;                          // the track's name, empty until the DAW says
     std::int64_t track_order_ = -1;                   // the track's position, -1 until the DAW says
     double sample_rate_ = 0;                          // 0 until setup()

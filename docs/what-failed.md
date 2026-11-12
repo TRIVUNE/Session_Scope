@@ -174,6 +174,7 @@ Record: [`decisions/0006-offline-session-analyzer.md`](decisions/0006-offline-se
 | The Sensor's default answer to "save your state" | "Not implemented" made Live log an error on every save | It answers "done" for its empty state |
 | Tests that backed up and restored the real `hud.ini` | A second test overwrote the backup and the person's settings were lost | Tests pass `--settings <scratch file>`; screenshots touch no settings |
 | Moving the mouse from a script to test drags | At 200 % display scaling, Windows rescales the script's mouse, so it cannot aim | `--test-drag` and `--test-wheel` inside the HUD |
+| Engagement check moving only the first 16 parameters | Pro-Q 4 and Ozone 12 stayed bit-exact and looked "blocked" | Move every automatable parameter (up to 512): both respond (`research/gauntlet.md`) |
 | Shell heredocs to write files | Backslashes (`\n`, `\x`) get mangled | Write files with the editor tools |
 | REA with Ghidra 12.2 | REA rejects it; large executables timed out at Ghidra's default start-up limit | Ghidra 12.1.4, start-up timeout raised to 30 minutes |
 

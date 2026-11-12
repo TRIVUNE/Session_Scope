@@ -29,6 +29,16 @@ HostedVst3::HostedVst3(const char* table_name) : writer_(this, table_name) {}
 HostedVst3::~HostedVst3() = default;   // members go in reverse order: the effect before its module
 
 bool HostedVst3::load(const std::string& path, const VST3::UID& class_id, std::string& error) {
+    return load_matching(path, error, [&](const VST3::Hosting::ClassInfo& info) { return info.ID() == class_id; });
+}
+
+bool HostedVst3::load_by_name(const std::string& path, const std::string& name, std::string& error) {
+    return load_matching(path, error,
+                         [&](const VST3::Hosting::ClassInfo& info) { return name.empty() || info.name() == name; });
+}
+
+bool HostedVst3::load_matching(const std::string& path, std::string& error,
+                               const std::function<bool(const VST3::Hosting::ClassInfo&)>& wanted) {
     if (module_) {   // one effect per object: swapping would need the DAW to stop audio first
         error = "This Probe already has a hosted effect.";
         return false;
@@ -38,17 +48,22 @@ bool HostedVst3::load(const std::string& path, const VST3::UID& class_id, std::s
     auto module = Module::create(path, error);   // opens the .vst3 (loads its DLL); fills `error` on failure
     if (!module) return false;
 
-    // Find the wanted effect among the plug-ins the file holds. It must be an audio effect:
-    // a .vst3 also lists its controller classes, which can't process audio.
+    // Find the wanted plug-in among the ones the file holds. It must be an audio processor
+    // (an effect or an instrument: both are "Audio Module Class"): a .vst3 also lists its
+    // controller classes, which can't process audio.
     const auto& factory = module->getFactory();
     const auto classes = factory.classInfos();
     const auto selected = std::find_if(classes.begin(), classes.end(), [&](const auto& info) {
-        return info.ID() == class_id && info.category() == kVstAudioEffectClass;
+        return info.category() == kVstAudioEffectClass && wanted(info);
     });
     if (selected == classes.end()) {
         error = "The selected VST3 audio effect was not found in this module.";
         return false;
     }
+    sub_categories_ = selected->subCategoriesString();
+    vendor_ = selected->vendor();
+    version_ = selected->version();
+    class_id_ = selected->ID();
 
     factory.setHostContext(&host_);   // the factory may ask who its host is
     auto provider = std::make_unique<Provider>(factory, *selected);

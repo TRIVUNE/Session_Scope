@@ -27,6 +27,12 @@ place: **`docs/what-failed.md`** (read it before proposing an idea again). Two c
   scripts and the sensor retire from the product and the build (kept in the tree and history
   as research).
 
+**Built so far for the analyzer (12 Nov 2026):** `sessionscope bench PLUGIN.vst3...` runs each
+plug-in in its own bench host process (`native/bench/bench_host.cpp`, runner
+`engine/src/bench_runner.*`), with a watchdog and the engagement check. First gauntlet pass at
+default settings: 9 of 10 run headless (`docs/research/gauntlet.md`). Next: the same with the
+person's saved presets, then calibration against REAPER's live numbers.
+
 The rest of this handoff still describes the HUD as it is today; read it as the engine that
 will be re-pointed at the analyzer's data.
 

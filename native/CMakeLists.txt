@@ -181,6 +181,19 @@ add_dependencies(test_probe_bundle vst3_probe vst3_sensor)
 add_test(NAME vst3_probe_bundle COMMAND test_probe_bundle "${probe_bundle}" "${NATIVE_OUT}/SessionScope.vst3")
 set_tests_properties(vst3_probe_bundle PROPERTIES LABELS plugins)
 
+# ---- the offline bench (decision 0006): loads one plug-in outside any DAW and times it. Started by
+# `sessionscope bench` as a separate process, so a plug-in that crashes only takes this program down.
+add_executable(sessionscope_bench_host bench/bench_host.cpp vst3_probe/hosted_vst3.cpp "${validator_dir}/usediids.cpp")
+target_link_libraries(sessionscope_bench_host PRIVATE vst3_host_sdk -Wl,--subsystem=console)
+target_compile_options(sessionscope_bench_host PRIVATE ${PLUGIN_WARNINGS})
+set_target_properties(sessionscope_bench_host PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NATIVE_OUT}")
+# Its check: the bench on our own Sensor, a plug-in that passes sound through unchanged, so the
+# engagement check must say so (and the run must finish and write its result).
+add_dependencies(sessionscope_bench_host vst3_sensor)
+add_test(NAME bench_host_sensor
+         COMMAND sessionscope_bench_host "${NATIVE_OUT}/SessionScope.vst3" --out "${CMAKE_CURRENT_BINARY_DIR}/bench_sensor.json" --seconds 1)
+set_tests_properties(bench_host_sensor PROPERTIES LABELS plugins PASS_REGULAR_EXPRESSION "engagement: pass-through")
+
 # ---- checks: clap-validator (a downloaded program) and our small CLAP host
 fetch_from_zip(clap-validator
                https://github.com/free-audio/clap-validator/releases/download/0.4.1/clap-validator-0.4.1-127-g152b982-windows.zip
