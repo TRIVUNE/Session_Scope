@@ -12,7 +12,8 @@ file, measure every plug-in in SessionScope's own offline host (separate process
 own saved state, the project's own MIDI and audio), report ranked costs and visuals. Decision
 record: **`docs/decisions/0006-offline-session-analyzer.md`**; the evening's findings:
 `docs/research/Live-first-look.md`; prior-art scouting and the DRM defense:
-`docs/research/offline-analyzer-scouting.md`. Two consequences for the code in this handoff:
+`docs/research/offline-analyzer-scouting.md`. What failed on the way here, and why, in one
+place: **`docs/what-failed.md`** (read it before proposing an idea again). Two consequences for the code in this handoff:
 
 - **The HUD is re-targeted as the analyzer app's interface.** Its live-monitor role (watching
   a running DAW) is retired; its engine — the Direct3D 11 rendering, the module framework,
