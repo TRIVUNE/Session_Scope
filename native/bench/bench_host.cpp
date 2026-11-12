@@ -45,6 +45,7 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "public.sdk/source/vst/hosting/eventlist.h"
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include "public.sdk/source/vst/hosting/processdata.h"
@@ -190,6 +191,7 @@ Engagement check_sound(const Recording& r, std::int64_t latency, bool instrument
 
 struct Options {
     std::string plugin, class_name, preset;
+    int program = -1;   // a factory program to choose, -1: none
     fs::path out;
     double rate = 48000;
     int block = 256;
@@ -214,6 +216,12 @@ public:
         if (!options_.preset.empty()) {
             stage("preset");
             if (!load_preset(error)) return false;
+        }
+
+        find_programs();
+        if (options_.program >= 0) {
+            stage("program");
+            if (!queue_program(error)) return false;
         }
 
         stage("setup");
@@ -303,6 +311,10 @@ public:
         r.number("block", options_.block);
         r.number("latency", double(latency_));
         r.number("load_seconds", load_seconds_);
+        r.number("programs", program_count_);   // factory presets a host can choose (0: none offered)
+        if (options_.program >= 0)
+            r.text("program", std::size_t(options_.program) < program_names_.size() ? program_names_[std::size_t(options_.program)]
+                                                                                  : std::to_string(options_.program));
 
         // The times, as microseconds and as a share of the block's length in real time (the
         // plug-in's share of the audio thread: 100 % means this plug-in alone fills the deadline).
@@ -363,6 +375,58 @@ private:
             error = "The preset could not be loaded (made by another plug-in, or not a .vstpreset).";
             return false;
         }
+        return true;
+    }
+
+    // A plug-in's factory presets, the standard VST3 way: a "program list" whose names any host
+    // can read (IUnitInfo), chosen through the parameter marked as the program change. Vendors'
+    // own preset files (.ffp, .SerumPreset, .vpreset...) can only be opened by the plug-in's own
+    // window, so this is the only way an outside host can pick one of them.
+    void find_programs() {
+        if (!controller_) return;
+        const int32 count = controller_->getParameterCount();
+        for (int32 i = 0; i < count; ++i) {
+            ParameterInfo info{};
+            if (controller_->getParameterInfo(i, info) != kResultOk || !(info.flags & ParameterInfo::kIsProgramChange)) continue;
+            program_param_ = info.id;
+            program_count_ = info.stepCount + 1;   // a program change with n steps chooses among n + 1 programs
+            // The names, if the plug-in describes the list that belongs to this parameter's unit.
+            // The list is the one of the parameter's unit; plug-ins that don't link the two (JUCE
+            // ones) have a single list, so that one is taken.
+            FUnknownPtr<IUnitInfo> units(controller_);
+            if (!units) return;
+            ProgramListID list = kNoProgramListId;
+            for (int32 u = 0; u < units->getUnitCount(); ++u) {
+                UnitInfo unit{};
+                if (units->getUnitInfo(u, unit) == kResultOk && unit.id == info.unitId) list = unit.programListId;
+            }
+            ProgramListInfo first{};
+            if (list == kNoProgramListId && units->getProgramListCount() > 0 && units->getProgramListInfo(0, first) == kResultOk)
+                list = first.id;
+            if (list == kNoProgramListId) return;
+            for (int32 p = 0; p < program_count_; ++p) {
+                String128 name{};
+                units->getProgramName(list, p, name);
+                program_names_.push_back(utf8(std::wstring(name, name + std::char_traits<char16>::length(name))));
+            }
+            return;
+        }
+    }
+
+    bool queue_program(std::string& error) {
+        if (program_count_ < 1) {
+            error = "The plug-in offers no program list (its presets are only in its own window).";
+            return false;
+        }
+        if (options_.program >= program_count_) {
+            error = "There are only " + std::to_string(program_count_) + " programs.";
+            return false;
+        }
+        const ParamValue value = program_count_ > 1 ? double(options_.program) / double(program_count_ - 1) : 0.0;
+        controller_->setParamNormalized(program_param_, value);
+        int32 index = 0, point = 0;
+        if (auto* queue = nudges_.addParameterData(program_param_, index)) queue->addPoint(0, value, point);
+        pending_nudge_ = true;   // delivered with the first warm-up block
         return true;
     }
 
@@ -511,6 +575,9 @@ private:
     double load_seconds_ = 0;
     std::int64_t latency_ = 0, position_ = 0;
     int nudged_ = 0;
+    ParamID program_param_ = 0;               // the program-change parameter, if there is one
+    int32 program_count_ = 0;                 // how many programs it chooses among
+    std::vector<std::string> program_names_;  // their names, when the plug-in gives them
 
     HostProcessData data_;        // the audio buffers for every bus of the plug-in
     EventList events_{512};       // the notes of one block
@@ -540,6 +607,7 @@ bool parse(int argc, wchar_t** argv, Options& o, std::string& error) {
             if (option == L"--out") o.out = fs::u8path(value);
             else if (option == L"--class") o.class_name = value;
             else if (option == L"--preset") o.preset = value;
+            else if (option == L"--program") o.program = std::stoi(value);
             else if (option == L"--rate") o.rate = std::stod(value);
             else if (option == L"--block") o.block = std::stoi(value);
             else if (option == L"--seconds") o.seconds = std::stod(value);

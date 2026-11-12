@@ -41,7 +41,7 @@ constexpr const char *USAGE =
     "                       [--truncate] [--no-host]\n"
     "                       write a synthetic trace\n"
     "  sessionscope probes [--json]                     CPU per track and plug-in, from the SessionScope Probes\n"
-    "  sessionscope bench PLUGIN.vst3... [--class NAME] [--preset FILE] [--rate HZ] [--block N]\n"
+    "  sessionscope bench PLUGIN.vst3... [--class NAME] [--preset FILE] [--program N] [--rate HZ] [--block N]\n"
     "                       [--seconds N] [--timeout N] [--out DIR] [--json]\n"
     "                       time plug-ins offline, each in its own process (Windows)\n"
     "  sessionscope install [--uninstall] [--from DIR]  copy the built plug-ins to where DAWs look\n"
@@ -366,6 +366,7 @@ int bench_command(int argc, char *argv[]) {
             if (option == "--json") json = true;
             else if (option == "--class" && has_value) request.class_name = argv[++i];
             else if (option == "--preset" && has_value) request.preset = fs::u8path(argv[++i]);
+            else if (option == "--program" && has_value) request.program = std::stoi(argv[++i]);
             else if (option == "--rate" && has_value) request.rate = std::stod(argv[++i]);
             else if (option == "--block" && has_value) request.block = std::stoi(argv[++i]);
             else if (option == "--seconds" && has_value) request.seconds = std::stod(argv[++i]);

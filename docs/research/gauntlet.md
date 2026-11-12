@@ -67,11 +67,47 @@ tenths of a point between runs (Serum 2: 3.61 % and 3.37 %).
 5. Scouting predicted 7 to 9 of 10. On this machine: **9 of 10 run headless, and the 10th
    (Kontakt) is still open.** The bet of decision 0006 holds so far.
 
+## Second pass: with presets (same day)
+
+The search found **no `.vstpreset` files** on this computer, but thousands of presets in each
+vendor's own format: FabFilter `.ffp` (6,467), Valhalla `.vpreset` (1,848), iZotope and others
+`.preset` (4,821), Serum `.SerumPreset` (627) and `.fxp` (645), Kontakt `.nki` (9). Only the
+plug-in's own window can open these: they are private formats, and no outside host can load
+them. The person's REAPER projects (`~/Sound/.../Neurography`) use none of the ten
+(IEM ambisonics, KClip3, Blackhole, MiniMeters).
+
+The one standard way a host can choose a plug-in's presets is the VST3 **program list**
+(`sessionscope bench X.vst3 --program N`, added for this; the result names the program and says
+how many the plug-in offers):
+
+| Plug-in | Programs offered | What they are |
+| --- | ---: | --- |
+| CHOWTapeModel | 94 | its real factory presets, by name |
+| Serum 2, Pro-Q 4, Kontakt 8 | 128 | empty MIDI program-change slots ("Prog 11"); choosing one changes nothing |
+| the other six | 0 | – |
+
+CHOWTapeModel with five of its presets, 5 s each:
+
+| Program | Mean | p99 | Mean, µs |
+| --- | ---: | ---: | ---: |
+| 0 Default | 5.31 % | 6.75 % | 283.1 |
+| 10 Clean Fat | 8.05 % | 9.66 % | 429.5 |
+| 30 Punchy Lofi Drums | 4.01 % | 5.00 % | 213.9 |
+| 60 Clean Cassette | 3.97 % | 5.12 % | 211.9 |
+| 90 Solid Tape II | 4.90 % | 6.39 % | 261.5 |
+
+**Reading:** the same plug-in costs between 4 and 8 % depending only on its settings, so
+numbers at default settings are not enough. For the other nine, the person's presets can only
+reach the bench the way they reach a project: chosen in the plug-in's own window inside a DAW,
+then saved by the DAW (in the project file, or as a `.vstpreset` where the DAW can export one).
+That is the analyzer's real path anyway (decision 0006: the state comes from the project file).
+
 ## Not measured yet
 
-- **Real settings.** Everything above is at the defaults. Next: a `.vstpreset` per plug-in,
-  saved by the person from a DAW (`sessionscope bench X.vst3 --preset file.vstpreset`), above
-  all for Kontakt (an instrument loaded), Pro-Q 4 (bands) and Ozone 12 (modules on).
+- **Real settings for nine of the ten.** Needs a DAW-saved state: the person picks a preset in
+  each plug-in's window, in a REAPER project (or saves a `.vstpreset`), and the bench loads that
+  state. For the project route the bench needs the `.rpp` reader (step 3 of the plan), which
+  takes each plug-in's state out of the project.
 - **Agreement with live numbers** (the calibration gate): the same plug-ins, same settings, in
   REAPER with anticipative FX off, read through the extension's real-time CPU. Until then every
   number here is an *estimate*.

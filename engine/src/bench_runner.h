@@ -24,6 +24,7 @@ struct BenchRequest {
     std::filesystem::path plugin;     // the .vst3 file or bundle folder
     std::string class_name;           // which plug-in in the file; empty: the first one
     std::filesystem::path preset;     // a saved .vstpreset to load first; empty: the plug-in's defaults
+    int program = -1;                 // a factory program (preset) to choose by number; -1: none
     double rate = 48000;              // sample rate
     int block = 256;                  // block size, in samples
     double seconds = 10;              // how much sound to time (after one second of warm-up)

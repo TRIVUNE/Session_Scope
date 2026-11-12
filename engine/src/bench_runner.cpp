@@ -102,6 +102,7 @@ BenchRun run_bench(const fs::path &host, const BenchRequest &request, const fs::
                            number_text(request.block) + L" --seconds " + number_text(request.seconds);
     if (!request.class_name.empty()) command += L" --class " + quoted(fs::u8path(request.class_name).wstring());
     if (!request.preset.empty()) command += L" --preset " + quoted(request.preset.wstring());
+    if (request.program >= 0) command += L" --program " + number_text(request.program);
 
     // The host's output and errors (and anything a plug-in prints) go to the log file. The handle
     // must be inheritable, so the new process can write to it.
