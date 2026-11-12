@@ -194,6 +194,7 @@ struct Options {
     std::string class_id;                       // 32 hex digits: choose the plug-in by its id (a project names it so)
     std::string state_component, state_controller;   // files with a saved state's two halves (from a project)
     bool report_parameters = false;             // put every parameter's value into the result
+    bool list_classes = false;                  // only list the plug-ins in the file (for finding one by id)
     int program = -1;   // a factory program to choose, -1: none
     fs::path out;
     double rate = 48000;
@@ -745,6 +746,7 @@ bool parse(int argc, wchar_t** argv, Options& o, std::string& error) {
             else if (option == L"--state-component") o.state_component = value;
             else if (option == L"--state-controller") o.state_controller = value;
             else if (option == L"--report-parameters") o.report_parameters = value == "1";
+            else if (option == L"--list-classes") o.list_classes = value == "1";
             else if (option == L"--preset") o.preset = value;
             else if (option == L"--program") o.program = std::stoi(value);
             else if (option == L"--rate") o.rate = std::stod(value);
@@ -784,6 +786,34 @@ int main() {
 
     Result result;
     result.text("plugin", options.plugin);
+    if (options.list_classes) {
+        // Only the list of plug-ins in the file, the way a DAW's scan reads it: the file is opened
+        // and its factory asked, but no plug-in is created. Used to find a plug-in by its id when
+        // a project (an Ableton set) doesn't name the file.
+        stage("list");
+        std::string load_error;
+        auto module = VST3::Hosting::Module::create(options.plugin, load_error);
+        if (!module) {
+            result.text("status", "failed");
+            result.text("error", load_error);
+            result.write(options.out);
+            return 3;
+        }
+        std::string classes = "[";
+        for (const auto& info : module->getFactory().classInfos()) {
+            if (info.category() != kVstAudioEffectClass) continue;
+            const FUID id = FUID::fromTUID(info.ID().data());
+            char hex[33];
+            std::snprintf(hex, sizeof hex, "%08X%08X%08X%08X", static_cast<unsigned>(id.getLong1()), static_cast<unsigned>(id.getLong2()),
+                          static_cast<unsigned>(id.getLong3()), static_cast<unsigned>(id.getLong4()));
+            classes += (classes.size() > 1 ? ", " : "") + std::string("{\"id\": ") + json_string(hex) +
+                       ", \"name\": " + json_string(info.name()) + ", \"categories\": " + json_string(info.subCategoriesString()) + "}";
+        }
+        result.text("status", "listed");
+        result.raw("classes", classes + "]");
+        stage("done");
+        return result.write(options.out) ? 0 : 4;
+    }
     {
         Bench bench(options);
         if (!bench.prepare(error)) {

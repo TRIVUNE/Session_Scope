@@ -11,11 +11,15 @@
 #include "bench_runner.h"
 
 #include "install.h"
+#include "json.h"
 
 #include <cctype>
 #include <cstdlib>
+#include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <optional>
 #include <sstream>
 #include <system_error>
 #include <vector>
@@ -90,13 +94,16 @@ fs::path bench_host_near_program() {
 #endif
 }
 
-fs::path find_vst3(const std::string &file_name) {
-    const auto lower = [](std::string text) {
-        for (char &c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return text;
-    };
-    const std::string wanted = lower(file_name);
-    std::vector<fs::path> roots;
+namespace {
+
+std::string lower(std::string text) {
+    for (char &c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return text;
+}
+
+// Every installed .vst3 (file or bundle folder) in the standard VST3 folders and their subfolders.
+std::vector<fs::path> installed_vst3() {
+    std::vector<fs::path> roots, found;
 #ifdef _WIN32
     if (const wchar_t *common = _wgetenv(L"CommonProgramFiles")) roots.push_back(fs::path(common) / "VST3");
     if (const wchar_t *local = _wgetenv(L"LOCALAPPDATA")) roots.push_back(fs::path(local) / "Programs" / "Common" / "VST3");
@@ -109,11 +116,104 @@ fs::path find_vst3(const std::string &file_name) {
         // A bundle is a folder named .vst3; its insides are not searched (they hold the same name again).
         for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, error);
              !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
-            const std::string name = it->path().filename().u8string();
             if (lower(it->path().extension().u8string()) != ".vst3") continue;
-            if (lower(name) == wanted) return it->path();
+            found.push_back(it->path());
             if (it->is_directory(error)) it.disable_recursion_pending();
         }
+    }
+    return found;
+}
+
+// The words of a plug-in's name worth matching against file names: letters and digits, three or
+// more long, lower case ("UADx LA-2A Tube Compressor" -> uadx, tube, compressor).
+std::vector<std::string> name_words(const std::string &name) {
+    std::vector<std::string> words;
+    std::string word;
+    for (const char c : name + " ") {
+        if (std::isalnum(static_cast<unsigned char>(c))) {
+            word += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        } else {
+            if (word.size() >= 3) words.push_back(word);
+            word.clear();
+        }
+    }
+    return words;
+}
+
+}  // namespace
+
+fs::path find_vst3(const std::string &file_name) {
+    const std::string wanted = lower(file_name);
+    for (const fs::path &file : installed_vst3())
+        if (lower(file.filename().u8string()) == wanted) return file;
+    return {};
+}
+
+fs::path default_vst3_index() {
+#ifdef _WIN32
+    const wchar_t *local = _wgetenv(L"LOCALAPPDATA");
+    return local ? fs::path(local) / "SessionScope" / "vst3-index.tsv" : fs::path();
+#else
+    const char *home = std::getenv("HOME");
+    return home ? fs::path(home) / "Library/Caches/SessionScope/vst3-index.tsv" : fs::path();
+#endif
+}
+
+fs::path find_vst3_by_id(const fs::path &host, const std::string &class_id, const std::string &name_hint,
+                         const fs::path &cache, const fs::path &work_folder) {
+    // The cache: "path <tab> modification time <tab> id,id,..." per line. A file that changed
+    // since (an update) is asked again.
+    struct Known {
+        long long modified = 0;
+        std::string ids;
+    };
+    std::map<std::string, Known> known;
+    {
+        std::istringstream lines(read_file(cache));
+        std::string line;
+        while (std::getline(lines, line)) {
+            const std::size_t a = line.find('\t'), b = line.find('\t', a + 1);
+            if (a == std::string::npos || b == std::string::npos) continue;
+            known[line.substr(0, a)] = Known{std::atoll(line.substr(a + 1, b - a - 1).c_str()), line.substr(b + 1)};
+        }
+    }
+    const std::string wanted = lower(class_id);
+    const auto modified = [](const fs::path &file) {
+        std::error_code error;
+        return static_cast<long long>(fs::last_write_time(file, error).time_since_epoch().count());
+    };
+
+    // Files whose names share words with the plug-in's name first; the rest after.
+    std::vector<fs::path> files = installed_vst3();
+    const std::vector<std::string> words = name_words(name_hint);
+    const auto score = [&](const fs::path &file) {
+        const std::string text = lower(file.u8string());
+        int hits = 0;
+        for (const std::string &w : words) hits += text.find(w) != std::string::npos;
+        return hits;
+    };
+    std::stable_sort(files.begin(), files.end(), [&](const fs::path &a, const fs::path &b) { return score(a) > score(b); });
+
+    for (const fs::path &file : files) {
+        const std::string key = file.u8string();
+        auto entry = known.find(key);
+        if (entry == known.end() || entry->second.modified != modified(file)) {
+            BenchRequest list;
+            list.plugin = file;
+            list.list_classes = true;
+            list.timeout_seconds = 30;
+            const BenchRun run = run_bench(host, list, work_folder, "list");
+            std::string ids;
+            if (const std::optional<JsonValue> result = parse_json(run.result_json)) {
+                for (const JsonValue &c : (*result)["classes"].items()) ids += (ids.empty() ? "" : ",") + lower(c["id"].text());
+            }
+            known[key] = Known{modified(file), ids};   // a file that failed is kept too (no ids), so it isn't asked again
+            std::error_code ignored;
+            fs::create_directories(cache.parent_path(), ignored);
+            std::ofstream(cache, std::ios::app) << key << '\t' << known[key].modified << '\t' << ids << '\n';
+            entry = known.find(key);
+        }
+        if (entry->second.ids.find(wanted) != std::string::npos) return file;
     }
     return {};
 }
@@ -138,6 +238,7 @@ BenchRun run_bench(const fs::path &host, const BenchRequest &request, const fs::
     if (!request.state_component.empty()) command += L" --state-component " + quoted(request.state_component.wstring());
     if (!request.state_controller.empty()) command += L" --state-controller " + quoted(request.state_controller.wstring());
     if (request.report_parameters) command += L" --report-parameters 1";
+    if (request.list_classes) command += L" --list-classes 1";
 
     // The host's output and errors (and anything a plug-in prints) go to the log file. The handle
     // must be inheritable, so the new process can write to it.

@@ -34,7 +34,7 @@ default settings: 9 of 10 run headless (`docs/research/gauntlet.md`). The person
 in vendor formats no host can open, so settings come from projects instead:
 `sessionscope bench --project FILE.rpp` reads every VST3 plug-in's saved state out of a REAPER
 project (`engine/src/rpp_reader.*`); all 13,455 parameters of ten plug-ins matched REAPER after
-reopening (`docs/research/rpp-state.md`). Next: calibration against REAPER's live numbers.
+reopening (`docs/research/rpp-state.md`). Ableton Live sets the same way (`--project FILE.als`, `engine/src/als_reader.*`, `inflate.*`; `docs/research/als-state.md`). Next: calibration against REAPER's live numbers.
 
 The rest of this handoff still describes the HUD as it is today; read it as the engine that
 will be re-pointed at the analyzer's data.

@@ -25,31 +25,19 @@
 // decoded on its own and the bytes are joined.
 #pragma once
 
+#include "project_plugin.h"
+
 #include <filesystem>
 #include <string>
 #include <vector>
 
 namespace sessionscope {
 
-struct RppPlugin {
-    std::string track;          // the track's name ("" if it has none); "MASTER" for the master track
-    int track_number = 0;       // 1 for the first track, 0 for the master
-    std::string kind;           // "VST3", "VST" (VST2), "JS", "CLAP", "AU", "DX"... as the block names it
-    std::string name;           // as REAPER shows it: "VST3: Pro-Q 4 (FabFilter)"
-    std::string file;           // the plug-in's file name, "FabFilter Pro-Q 4.vst3" (no folder)
-    std::string class_id;       // VST3: the plug-in's id as 32 hex digits; empty otherwise
-    bool bypassed = false;      // switched off in the project
-    bool offline = false;       // set offline in the project (not even loaded)
-    std::string component;      // VST3: the audio part's saved state (raw bytes)
-    std::string controller;     // VST3: the controller's saved state (raw bytes, often empty)
-    std::string problem;        // why the state could not be read; empty when it was
-};
-
 // Every plug-in in the project, in track order. Throws std::runtime_error if the file can't be read.
-std::vector<RppPlugin> read_rpp_plugins(const std::filesystem::path &project);
+std::vector<ProjectPlugin> read_rpp_plugins(const std::filesystem::path &project);
 
 // The same, from the project's text (for tests).
-std::vector<RppPlugin> parse_rpp_plugins(const std::string &text);
+std::vector<ProjectPlugin> parse_rpp_plugins(const std::string &text);
 
 // Decodes base64 text (whitespace ignored). Stops at the first character that isn't base64.
 std::string decode_base64(const std::string &text);

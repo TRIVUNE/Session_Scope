@@ -73,7 +73,7 @@ struct Reader {
 };
 
 // Parts 1 and 2 of a VST3 block (see rpp_reader.h): fills component and controller, or problem.
-void read_vst3_state(const std::string &bytes, RppPlugin &plugin) {
+void read_vst3_state(const std::string &bytes, ProjectPlugin &plugin) {
     Reader r{bytes};
     r.u32();                         // REAPER's id for the plug-in
     r.u32();                         // a fixed magic number
@@ -118,15 +118,15 @@ std::string decode_base64(const std::string &text) {
     return out;
 }
 
-std::vector<RppPlugin> parse_rpp_plugins(const std::string &text) {
-    std::vector<RppPlugin> plugins;
+std::vector<ProjectPlugin> parse_rpp_plugins(const std::string &text) {
+    std::vector<ProjectPlugin> plugins;
     std::istringstream lines(text);
     std::string raw;
     std::vector<std::string> blocks;   // the open blocks, outermost first: "REAPER_PROJECT", "TRACK", "FXCHAIN"...
     std::string track;                 // the track we are in
     int track_number = 0, tracks_seen = 0;
     bool bypassed = false, offline = false;   // from the last BYPASS line
-    RppPlugin *current = nullptr;             // the plug-in block we are inside
+    ProjectPlugin *current = nullptr;             // the plug-in block we are inside
     std::string base64;                       // its decoded lines, joined
 
     while (std::getline(lines, raw)) {
@@ -158,7 +158,7 @@ std::vector<RppPlugin> parse_rpp_plugins(const std::string &text) {
                 track = "MASTER";
             } else if (block == "VST" || block == "JS" || block == "CLAP" || block == "AU" || block == "DX" ||
                        block == "LV2") {
-                RppPlugin plugin;
+                ProjectPlugin plugin;
                 plugin.track = track;
                 plugin.track_number = track_number;
                 plugin.name = w.size() > 1 ? w[1] : "";
@@ -201,7 +201,7 @@ std::vector<RppPlugin> parse_rpp_plugins(const std::string &text) {
     return plugins;
 }
 
-std::vector<RppPlugin> read_rpp_plugins(const std::filesystem::path &project) {
+std::vector<ProjectPlugin> read_rpp_plugins(const std::filesystem::path &project) {
     std::ifstream file(project, std::ios::binary);
     if (!file) throw std::runtime_error("Can't open " + project.u8string());
     const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());

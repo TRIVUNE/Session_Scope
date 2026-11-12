@@ -28,6 +28,7 @@ struct BenchRequest {
     std::string class_id;             // 32 hex digits: the plug-in by its id (as a project names it)
     std::filesystem::path state_component, state_controller;   // a saved state's two halves (from a project)
     bool report_parameters = false;   // the result lists every parameter's value after the state is loaded
+    bool list_classes = false;        // only list the plug-ins in the file (no plug-in is created)
     double rate = 48000;              // sample rate
     int block = 256;                  // block size, in samples
     double seconds = 10;              // how much sound to time (after one second of warm-up)
@@ -54,6 +55,19 @@ std::filesystem::path bench_host_near_program();
 // names it without a folder). Looks through the standard VST3 folders and their subfolders
 // (vendors keep their own: VST3\FabFilter\...). Empty if it isn't there.
 std::filesystem::path find_vst3(const std::string &file_name);
+
+// Where the VST3 plug-in with this id (32 hex digits) is installed, for projects that name only
+// the id (Ableton Live). Like a DAW's plug-in scan: each .vst3 file is asked for the plug-ins it
+// holds by the bench host, in its own process with a 30 s watchdog, and the answer is kept in
+// `cache` (one line per file: path, its modification time, the ids in it), so each file is asked
+// once. Files whose names share a word with `name_hint` are asked first, and the search stops at
+// the first match. Empty if no installed file holds the id.
+std::filesystem::path find_vst3_by_id(const std::filesystem::path &host, const std::string &class_id,
+                                      const std::string &name_hint, const std::filesystem::path &cache,
+                                      const std::filesystem::path &work_folder);
+
+// Where the id index is kept: %LOCALAPPDATA%\SessionScope\vst3-index.tsv (macOS: ~/Library/Caches).
+std::filesystem::path default_vst3_index();
 
 // Runs the host on one plug-in. `work_folder` gets the result and log files, named after `tag`.
 BenchRun run_bench(const std::filesystem::path &host, const BenchRequest &request,

@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +20,7 @@
 #include "json.h"
 #include "probe_monitor.h"
 #include "reaper_tools.h"
+#include "als_reader.h"
 #include "rpp_reader.h"
 #include "report.h"
 #include "ring_reader.h"
@@ -57,6 +59,12 @@ std::atomic<bool> g_stop_requested{false};
 void request_stop(int) { g_stop_requested = true; }
 
 std::string display_text(const fs::path &path) { return path.u8string(); }
+
+std::string lower_extension(const fs::path &path) {   // ".als", ".rpp"... in lower case
+    std::string ext = path.extension().u8string();
+    for (char &c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext;
+}
 
 // The options both commands share. Returns false, after explaining why, if an argument is wrong.
 bool parse_options(int argc, char *argv[], bool allow_seconds, std::optional<fs::path> &root, double &seconds) {
@@ -415,9 +423,11 @@ int bench_command(int argc, char *argv[]) {
         jobs.push_back(job);
     }
     if (!project.empty()) {
-        std::vector<RppPlugin> found;
+        std::vector<ProjectPlugin> found;
         try {
-            found = read_rpp_plugins(project);
+            // REAPER (.rpp, text) or Ableton Live (.als, gzip XML).
+            const bool live = lower_extension(project) == ".als";
+            found = live ? read_als_plugins(project) : read_rpp_plugins(project);
         } catch (const std::exception &e) {
             std::fprintf(stderr, "%s\n", e.what());
             return 1;
@@ -425,13 +435,15 @@ int bench_command(int argc, char *argv[]) {
         std::error_code ignored;
         fs::create_directories(out / "state", ignored);
         for (std::size_t n = 0; n < found.size(); ++n) {
-            const RppPlugin &p = found[n];
+            const ProjectPlugin &p = found[n];
             Job job{(p.track.empty() ? "Track " + std::to_string(p.track_number) : p.track) + ": " + p.name, request, ""};
             if (p.offline) job.skip = "offline in the project";
             else if (p.kind != "VST3") job.skip = "not measured: " + p.kind + " plug-ins are not hosted yet";
             else if (p.bypassed) job.skip = "bypassed in the project (costs about nothing)";
             else if (!p.problem.empty()) job.skip = "not measured: " + p.problem;
-            else if ((job.request.plugin = find_vst3(p.file)).empty()) job.skip = "not installed here: " + p.file;
+            else if ((job.request.plugin = p.file.empty() ? find_vst3_by_id(host, p.class_id, p.name, default_vst3_index(), out / "scan")
+                                                           : find_vst3(p.file)).empty())
+                job.skip = "not installed here: " + (p.file.empty() ? p.name : p.file);
             else {
                 // The two halves of the saved state, as files the bench host reads.
                 const fs::path base = out / "state" / std::to_string(n + 1);

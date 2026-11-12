@@ -10,7 +10,7 @@
 
 using sessionscope::decode_base64;
 using sessionscope::parse_rpp_plugins;
-using sessionscope::RppPlugin;
+using sessionscope::ProjectPlugin;
 
 namespace {
 
@@ -96,14 +96,14 @@ int main() {
         "  >\n"
         ">\n";
 
-    const std::vector<RppPlugin> plugins = parse_rpp_plugins(project);
+    const std::vector<ProjectPlugin> plugins = parse_rpp_plugins(project);
     CHECK(plugins.size() == 6);
     if (plugins.size() == 6) {
-        const RppPlugin &master = plugins[0];
+        const ProjectPlugin &master = plugins[0];
         CHECK(master.track == "MASTER" && master.track_number == 0);
         CHECK(master.kind == "VST3" && master.component == "master" && master.controller.empty());
 
-        const RppPlugin &synth = plugins[1];
+        const ProjectPlugin &synth = plugins[1];
         CHECK(synth.track == "Lead synth");   // the track's own NAME, not the item's
         CHECK(synth.track_number == 1);
         CHECK(synth.file == "My Synth.vst3");
@@ -115,7 +115,7 @@ int main() {
         CHECK(plugins[2].bypassed && plugins[2].component == "reverb");
         CHECK(plugins[3].kind == "VST" && plugins[3].component.empty());   // VST2: no VST3 state is read
 
-        const RppPlugin &broken = plugins[4];
+        const ProjectPlugin &broken = plugins[4];
         CHECK(broken.offline);
         CHECK(!broken.problem.empty() && broken.component.empty());   // sizes that don't add up: no state at all
 
