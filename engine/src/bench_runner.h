@@ -25,6 +25,9 @@ struct BenchRequest {
     std::string class_name;           // which plug-in in the file; empty: the first one
     std::filesystem::path preset;     // a saved .vstpreset to load first; empty: the plug-in's defaults
     int program = -1;                 // a factory program (preset) to choose by number; -1: none
+    std::string class_id;             // 32 hex digits: the plug-in by its id (as a project names it)
+    std::filesystem::path state_component, state_controller;   // a saved state's two halves (from a project)
+    bool report_parameters = false;   // the result lists every parameter's value after the state is loaded
     double rate = 48000;              // sample rate
     int block = 256;                  // block size, in samples
     double seconds = 10;              // how much sound to time (after one second of warm-up)
@@ -46,6 +49,11 @@ struct BenchRun {
 
 // The bench host that belongs to the running program (build/native next to build/engine).
 std::filesystem::path bench_host_near_program();
+
+// Where an installed VST3 plug-in is, by its file name ("FabFilter Pro-Q 4.vst3": a project
+// names it without a folder). Looks through the standard VST3 folders and their subfolders
+// (vendors keep their own: VST3\FabFilter\...). Empty if it isn't there.
+std::filesystem::path find_vst3(const std::string &file_name);
 
 // Runs the host on one plug-in. `work_folder` gets the result and log files, named after `tag`.
 BenchRun run_bench(const std::filesystem::path &host, const BenchRequest &request,

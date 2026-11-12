@@ -30,8 +30,11 @@ place: **`docs/what-failed.md`** (read it before proposing an idea again). Two c
 **Built so far for the analyzer (12 Nov 2026):** `sessionscope bench PLUGIN.vst3...` runs each
 plug-in in its own bench host process (`native/bench/bench_host.cpp`, runner
 `engine/src/bench_runner.*`), with a watchdog and the engagement check. First gauntlet pass at
-default settings: 9 of 10 run headless (`docs/research/gauntlet.md`). Next: the same with the
-person's saved presets, then calibration against REAPER's live numbers.
+default settings: 9 of 10 run headless (`docs/research/gauntlet.md`). The person's presets are
+in vendor formats no host can open, so settings come from projects instead:
+`sessionscope bench --project FILE.rpp` reads every VST3 plug-in's saved state out of a REAPER
+project (`engine/src/rpp_reader.*`); all 13,455 parameters of ten plug-ins matched REAPER after
+reopening (`docs/research/rpp-state.md`). Next: calibration against REAPER's live numbers.
 
 The rest of this handoff still describes the HUD as it is today; read it as the engine that
 will be re-pointed at the analyzer's data.

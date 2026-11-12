@@ -175,7 +175,11 @@ Record: [`decisions/0006-offline-session-analyzer.md`](decisions/0006-offline-se
 | Tests that backed up and restored the real `hud.ini` | A second test overwrote the backup and the person's settings were lost | Tests pass `--settings <scratch file>`; screenshots touch no settings |
 | Moving the mouse from a script to test drags | At 200 % display scaling, Windows rescales the script's mouse, so it cannot aim | `--test-drag` and `--test-wheel` inside the HUD |
 | Engagement check moving only the first 16 parameters | Pro-Q 4 and Ozone 12 stayed bit-exact and looked "blocked" | Move every automatable parameter (up to 512): both respond (`research/gauntlet.md`) |
-| Shell heredocs to write files | Backslashes (`\n`, `\x`) get mangled | Write files with the editor tools |
+| Loading the person's presets from their files | Every vendor has its own format (`.ffp`, `.SerumPreset`, `.vpreset`...); only the plug-in's own window opens them | Take the state a DAW saved in the project: the standard VST3 form, whatever the vendor (`research/rpp-state.md`) |
+| Reading a plug-in's parameters right after giving it its state | UADx LA-2A showed Gain 0.322 instead of 0.370: it applies its state only once switched on | Read them after the run (and before any nudge) |
+| Comparing with the values a script had just set in REAPER | Plug-ins round switches and steps, and don't save MIDI-CC slots: hundreds of false differences | Compare with REAPER after reopening the saved project |
+| Taking the VST3 id from the 5th word of `<VST ...>` | The id was always empty; the bench silently used the first plug-in in each file | The 6th word, read as four 32-bit numbers; a unit test holds it |
+| Shell heredocs to write files | Backslashes (`\n`, `\x`) get mangled; again on 12 Nov in a Lua script (REAPER showed "invalid escape sequence") | Write files with the editor tools, always |
 | REA with Ghidra 12.2 | REA rejects it; large executables timed out at Ghidra's default start-up limit | Ghidra 12.1.4, start-up timeout raised to 30 minutes |
 
 ## How to avoid repeating these

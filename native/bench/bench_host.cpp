@@ -191,6 +191,9 @@ Engagement check_sound(const Recording& r, std::int64_t latency, bool instrument
 
 struct Options {
     std::string plugin, class_name, preset;
+    std::string class_id;                       // 32 hex digits: choose the plug-in by its id (a project names it so)
+    std::string state_component, state_controller;   // files with a saved state's two halves (from a project)
+    bool report_parameters = false;             // put every parameter's value into the result
     int program = -1;   // a factory program to choose, -1: none
     fs::path out;
     double rate = 48000;
@@ -206,7 +209,16 @@ public:
     bool prepare(std::string& error) {
         stage("load");
         const auto load_start = sessionscope::probes::now_ns();
-        if (!effect_.load_by_name(options_.plugin, options_.class_name, error)) return false;
+        if (!options_.class_id.empty()) {
+            TUID id{};
+            if (!hex_id(options_.class_id, id)) {
+                error = "--class-id must be 32 hex digits.";
+                return false;
+            }
+            if (!effect_.load(options_.plugin, VST3::UID::fromTUID(id), error)) return false;
+        } else if (!effect_.load_by_name(options_.plugin, options_.class_name, error)) {
+            return false;
+        }
         load_seconds_ = double(sessionscope::probes::now_ns() - load_start) / 1e9;
         component_ = effect_.component();
         processor_ = effect_.processor();
@@ -216,6 +228,10 @@ public:
         if (!options_.preset.empty()) {
             stage("preset");
             if (!load_preset(error)) return false;
+        }
+        if (!options_.state_component.empty()) {
+            stage("state");
+            if (!load_state(error)) return false;
         }
 
         find_programs();
@@ -270,10 +286,18 @@ public:
             processor_->setProcessing(true);
 
             stage("warm-up");
+            collect_reported_ = true;
             for (std::int64_t i = 0; i < warmup; ++i) process_block(false, false);
+            collect_reported_ = false;
             stage("measure");
             for (std::int64_t i = 0; i < measured; ++i) process_block(true, true);
             engagement_ = check_sound(recording_, latency_, instrument_);
+
+            // The parameters as the plug-in has them now, at the settings that were timed (some
+            // plug-ins finish applying a saved state only once running: the UADx LA-2A). Read by
+            // the main thread, as a DAW would; this thread waits for it, before any nudge.
+            snapshot_wanted_ = true;
+            while (snapshot_wanted_) Sleep(1);
 
             // Second chance for a plug-in that left the sound alone: move some of its parameters
             // and listen again (two seconds). The times above are kept: they are the plug-in at
@@ -293,6 +317,15 @@ public:
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
                 TranslateMessage(&message);
                 DispatchMessageW(&message);
+            }
+            if (snapshot_wanted_) {
+                // What a DAW does with the values the audio part reported during the warm-up:
+                // give them to the controller, so the list is what a DAW would show.
+                if (controller_) {
+                    for (const auto& [id, value] : reported_values_) controller_->setParamNormalized(id, value);
+                    if (options_.report_parameters) parameters_after_run_ = parameters_now();
+                }
+                snapshot_wanted_ = false;
             }
             Sleep(5);
         }
@@ -352,6 +385,10 @@ public:
         r.number("change_db", engagement_.change_db);
         r.number("level_db", engagement_.level_db);
         r.number("nudged_parameters", nudged_);
+        if (options_.report_parameters) {
+            r.raw("parameters", parameters_json_);                  // right after the state was loaded
+            r.raw("parameters_after_run", parameters_after_run_);   // after the timed run, before any nudge
+        }
     }
 
     ~Bench() {
@@ -360,6 +397,86 @@ public:
     }
 
 private:
+    // "5653544B436C336B..." (32 hex digits, as REAPER writes it) to an id. REAPER writes the id as
+    // the four 32-bit numbers a plug-in declares it with (FUID l1 l2 l3 l4); on Windows their
+    // bytes are stored in a different order, so FUID does the conversion.
+    static bool hex_id(const std::string& hex, TUID id) {
+        if (hex.size() != 32) return false;
+        uint32 part[4] = {};
+        for (std::size_t i = 0; i < 4; ++i) {
+            unsigned long value = 0;
+            if (std::sscanf(hex.substr(8 * i, 8).c_str(), "%8lx", &value) != 1) return false;
+            part[i] = static_cast<uint32>(value);
+        }
+        FUID(part[0], part[1], part[2], part[3]).toTUID(id);
+        return true;
+    }
+
+    static void pump_messages(int milliseconds) {
+        const auto until = GetTickCount64() + static_cast<ULONGLONG>(milliseconds);
+        while (GetTickCount64() < until) {
+            MSG message;
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+            Sleep(5);
+        }
+    }
+
+    static bool read_bytes(const std::string& path, std::vector<char>& bytes) {
+        std::ifstream file(fs::u8path(path), std::ios::binary);
+        if (!file) return false;
+        bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        return true;
+    }
+
+    // A state saved by a DAW, given back the way a DAW does when it reopens the project: the
+    // audio part's state to the audio part, the same bytes to the controller (so its knobs show
+    // the same values), then the controller's own state.
+    bool load_state(std::string& error) {
+        std::vector<char> component_bytes, controller_bytes;
+        if (!read_bytes(options_.state_component, component_bytes) ||
+            (!options_.state_controller.empty() && !read_bytes(options_.state_controller, controller_bytes))) {
+            error = "Can't open the state files.";
+            return false;
+        }
+        IPtr<MemoryStream> stream = owned(new MemoryStream(component_bytes.data(), static_cast<TSize>(component_bytes.size())));
+        if (component_->setState(stream) != kResultOk) {
+            error = "The plug-in refused its saved state (setState).";
+            return false;
+        }
+        if (controller_) {
+            IPtr<MemoryStream> again = owned(new MemoryStream(component_bytes.data(), static_cast<TSize>(component_bytes.size())));
+            controller_->setComponentState(again);
+            if (!controller_bytes.empty()) {
+                IPtr<MemoryStream> own = owned(new MemoryStream(controller_bytes.data(), static_cast<TSize>(controller_bytes.size())));
+                controller_->setState(own);
+            }
+        }
+        // Some plug-ins finish taking a state on the main thread a moment later (through Windows
+        // messages), the way a DAW's main thread would let them: give them half a second first.
+        pump_messages(500);
+        if (options_.report_parameters) parameters_json_ = parameters_now();
+        return true;
+    }
+
+    // Every parameter as [title, normalized value], read right after the state was loaded: the
+    // proof that the state arrived (they can be compared with what the DAW showed).
+    std::string parameters_now() const {
+        std::string out = "[";
+        const int32 count = controller_ ? controller_->getParameterCount() : 0;
+        for (int32 i = 0; i < count; ++i) {
+            ParameterInfo info{};
+            if (controller_->getParameterInfo(i, info) != kResultOk) continue;
+            const std::u16string title(reinterpret_cast<const char16_t*>(info.title));
+            const std::string name = utf8(std::wstring(title.begin(), title.end()));
+            out += (out.size() > 1 ? ", [" : "[") + json_string(name) + ", " +
+                   json_number(controller_->getParamNormalized(info.id)) + "]";
+        }
+        return out + "]";
+    }
+
     bool load_preset(std::string& error) {
         std::ifstream file(fs::u8path(options_.preset), std::ios::binary);
         if (!file) {
@@ -539,6 +656,10 @@ private:
         data_.processContext = &context_;
         data_.inputEvents = &events_;
         data_.inputParameterChanges = pending_nudge_ ? &nudges_ : nullptr;
+        // Where the audio part reports values it changed itself (a DAW passes them on to the
+        // controller, so its knobs follow).
+        reported_.clearQueue();
+        data_.outputParameterChanges = &reported_;
 
         // The input is kept before the call: a careless plug-in may write into its input buffers.
         if (keep_sound) {
@@ -550,6 +671,14 @@ private:
         processor_->process(data_);
         const auto elapsed = sessionscope::probes::now_ns() - start;
         if (timed) times_ns_.push_back(elapsed);
+        // Keep the last value of each parameter the audio part reported (outside the timing).
+        for (int32 q = 0; collect_reported_ && q < reported_.getParameterCount(); ++q) {
+            IParamValueQueue* queue = reported_.getParameterData(q);
+            ParamValue value = 0;
+            int32 offset = 0;
+            if (queue && queue->getPointCount() > 0 && queue->getPoint(queue->getPointCount() - 1, offset, value) == kResultOk)
+                reported_values_.emplace_back(queue->getParameterId(), value);
+        }
         if (pending_nudge_) {   // the changes are delivered once
             nudges_.clearQueue();
             pending_nudge_ = false;
@@ -578,10 +707,16 @@ private:
     ParamID program_param_ = 0;               // the program-change parameter, if there is one
     int32 program_count_ = 0;                 // how many programs it chooses among
     std::vector<std::string> program_names_;  // their names, when the plug-in gives them
+    std::string parameters_json_ = "[]";      // the parameters right after a saved state was loaded
+    std::string parameters_after_run_ = "[]"; // and again once the plug-in has been running
 
     HostProcessData data_;        // the audio buffers for every bus of the plug-in
     EventList events_{512};       // the notes of one block
     ParameterChanges nudges_{512}; // the nudge, delivered with one block
+    ParameterChanges reported_{4096};   // values the audio part reports back, one block at a time
+    std::vector<std::pair<ParamID, ParamValue>> reported_values_;   // all of them, in order, during warm-up
+    bool collect_reported_ = false;     // true during the warm-up
+    std::atomic<bool> snapshot_wanted_{false};   // the audio thread asks the main thread to read the parameters
     ProcessContext context_{};
     Noise noise_;
     std::vector<std::uint64_t> times_ns_;
@@ -606,6 +741,10 @@ bool parse(int argc, wchar_t** argv, Options& o, std::string& error) {
         try {
             if (option == L"--out") o.out = fs::u8path(value);
             else if (option == L"--class") o.class_name = value;
+            else if (option == L"--class-id") o.class_id = value;
+            else if (option == L"--state-component") o.state_component = value;
+            else if (option == L"--state-controller") o.state_controller = value;
+            else if (option == L"--report-parameters") o.report_parameters = value == "1";
             else if (option == L"--preset") o.preset = value;
             else if (option == L"--program") o.program = std::stoi(value);
             else if (option == L"--rate") o.rate = std::stod(value);

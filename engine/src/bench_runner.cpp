@@ -12,10 +12,13 @@
 
 #include "install.h"
 
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 #include <system_error>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -87,6 +90,34 @@ fs::path bench_host_near_program() {
 #endif
 }
 
+fs::path find_vst3(const std::string &file_name) {
+    const auto lower = [](std::string text) {
+        for (char &c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return text;
+    };
+    const std::string wanted = lower(file_name);
+    std::vector<fs::path> roots;
+#ifdef _WIN32
+    if (const wchar_t *common = _wgetenv(L"CommonProgramFiles")) roots.push_back(fs::path(common) / "VST3");
+    if (const wchar_t *local = _wgetenv(L"LOCALAPPDATA")) roots.push_back(fs::path(local) / "Programs" / "Common" / "VST3");
+#else
+    roots.push_back("/Library/Audio/Plug-Ins/VST3");
+    if (const char *home = std::getenv("HOME")) roots.push_back(fs::path(home) / "Library/Audio/Plug-Ins/VST3");
+#endif
+    for (const fs::path &root : roots) {
+        std::error_code error;
+        // A bundle is a folder named .vst3; its insides are not searched (they hold the same name again).
+        for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, error);
+             !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
+            const std::string name = it->path().filename().u8string();
+            if (lower(it->path().extension().u8string()) != ".vst3") continue;
+            if (lower(name) == wanted) return it->path();
+            if (it->is_directory(error)) it.disable_recursion_pending();
+        }
+    }
+    return {};
+}
+
 BenchRun run_bench(const fs::path &host, const BenchRequest &request, const fs::path &work_folder,
                    const std::string &tag) {
     BenchRun run;
@@ -103,6 +134,10 @@ BenchRun run_bench(const fs::path &host, const BenchRequest &request, const fs::
     if (!request.class_name.empty()) command += L" --class " + quoted(fs::u8path(request.class_name).wstring());
     if (!request.preset.empty()) command += L" --preset " + quoted(request.preset.wstring());
     if (request.program >= 0) command += L" --program " + number_text(request.program);
+    if (!request.class_id.empty()) command += L" --class-id " + fs::u8path(request.class_id).wstring();
+    if (!request.state_component.empty()) command += L" --state-component " + quoted(request.state_component.wstring());
+    if (!request.state_controller.empty()) command += L" --state-controller " + quoted(request.state_controller.wstring());
+    if (request.report_parameters) command += L" --report-parameters 1";
 
     // The host's output and errors (and anything a plug-in prints) go to the log file. The handle
     // must be inheritable, so the new process can write to it.

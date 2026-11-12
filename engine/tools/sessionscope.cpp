@@ -19,6 +19,7 @@
 #include "json.h"
 #include "probe_monitor.h"
 #include "reaper_tools.h"
+#include "rpp_reader.h"
 #include "report.h"
 #include "ring_reader.h"
 #include "simulate.h"
@@ -41,9 +42,11 @@ constexpr const char *USAGE =
     "                       [--truncate] [--no-host]\n"
     "                       write a synthetic trace\n"
     "  sessionscope probes [--json]                     CPU per track and plug-in, from the SessionScope Probes\n"
-    "  sessionscope bench PLUGIN.vst3... [--class NAME] [--preset FILE] [--program N] [--rate HZ] [--block N]\n"
-    "                       [--seconds N] [--timeout N] [--out DIR] [--json]\n"
-    "                       time plug-ins offline, each in its own process (Windows)\n"
+    "  sessionscope bench PLUGIN.vst3... | --project FILE.rpp\n"
+    "                       [--class NAME] [--preset FILE] [--program N] [--rate HZ] [--block N]\n"
+    "                       [--seconds N] [--timeout N] [--out DIR] [--parameters] [--json]\n"
+    "                       time plug-ins offline, each in its own process (Windows); from a\n"
+    "                       project, each with the settings saved in it\n"
     "  sessionscope install [--uninstall] [--from DIR]  copy the built plug-ins to where DAWs look\n"
     "  sessionscope reaper install|uninstall|validate   the REAPER scripts and the validation run\n"
     "  sessionscope --version\n"
@@ -349,21 +352,25 @@ int report_command(int argc, char *argv[]) {
     return 0;
 }
 
-// The offline bench (decision 0006): every plug-in named on the command line is loaded in its own
-// bench host process (bench_runner.h), timed, and checked for really processing. Prints one line
+// The offline bench (decision 0006): every plug-in, named on the command line or found in a
+// REAPER project (--project), is loaded in its own bench host process (bench_runner.h), timed, and
+// checked for really processing. From a project, each plug-in gets the state saved in it: the
+// person's own settings, whatever preset format the plug-in uses (rpp_reader.h). Prints one line
 // per plug-in; --json prints the hosts' results as they wrote them, plus how each run ended.
 // Times are shown only for plug-ins that passed the engagement check: a plug-in that did nothing
 // gets no number (docs/what-failed.md: a wrong number that looks right is the worst result).
 int bench_command(int argc, char *argv[]) {
     BenchRequest request;
     std::vector<fs::path> plugins;
-    fs::path out = fs::temp_directory_path() / "sessionscope-bench";
+    fs::path out = fs::temp_directory_path() / "sessionscope-bench", project;
     bool json = false;
     for (int i = 2; i < argc; ++i) {
         const std::string option = argv[i];
         const bool has_value = i + 1 < argc;
         try {
             if (option == "--json") json = true;
+            else if (option == "--parameters") request.report_parameters = true;
+            else if (option == "--project" && has_value) project = fs::u8path(argv[++i]);
             else if (option == "--class" && has_value) request.class_name = argv[++i];
             else if (option == "--preset" && has_value) request.preset = fs::u8path(argv[++i]);
             else if (option == "--program" && has_value) request.program = std::stoi(argv[++i]);
@@ -381,8 +388,8 @@ int bench_command(int argc, char *argv[]) {
             return 2;
         }
     }
-    if (plugins.empty()) {
-        std::fprintf(stderr, "Name at least one .vst3 file.\n%s", USAGE);
+    if (plugins.empty() == project.empty()) {
+        std::fprintf(stderr, "Name .vst3 files, or one project with --project.\n%s", USAGE);
         return 2;
     }
     if (plugins.size() > 1 && !request.preset.empty()) {
@@ -395,23 +402,77 @@ int bench_command(int argc, char *argv[]) {
         return 1;
     }
 
+    // What to run: one job per plug-in. A job with a `skip` reason is listed but not run.
+    struct Job {
+        std::string label;       // what the table shows before the bench's own name is known
+        BenchRequest request;
+        std::string skip;
+    };
+    std::vector<Job> jobs;
+    for (const fs::path &plugin : plugins) {
+        Job job{plugin.stem().u8string(), request, ""};
+        job.request.plugin = plugin;
+        jobs.push_back(job);
+    }
+    if (!project.empty()) {
+        std::vector<RppPlugin> found;
+        try {
+            found = read_rpp_plugins(project);
+        } catch (const std::exception &e) {
+            std::fprintf(stderr, "%s\n", e.what());
+            return 1;
+        }
+        std::error_code ignored;
+        fs::create_directories(out / "state", ignored);
+        for (std::size_t n = 0; n < found.size(); ++n) {
+            const RppPlugin &p = found[n];
+            Job job{(p.track.empty() ? "Track " + std::to_string(p.track_number) : p.track) + ": " + p.name, request, ""};
+            if (p.offline) job.skip = "offline in the project";
+            else if (p.kind != "VST3") job.skip = "not measured: " + p.kind + " plug-ins are not hosted yet";
+            else if (p.bypassed) job.skip = "bypassed in the project (costs about nothing)";
+            else if (!p.problem.empty()) job.skip = "not measured: " + p.problem;
+            else if ((job.request.plugin = find_vst3(p.file)).empty()) job.skip = "not installed here: " + p.file;
+            else {
+                // The two halves of the saved state, as files the bench host reads.
+                const fs::path base = out / "state" / std::to_string(n + 1);
+                job.request.class_id = p.class_id;
+                job.request.state_component = fs::path(base).concat(".component");
+                std::ofstream(job.request.state_component, std::ios::binary) << p.component;
+                if (!p.controller.empty()) {
+                    job.request.state_controller = fs::path(base).concat(".controller");
+                    std::ofstream(job.request.state_controller, std::ios::binary) << p.controller;
+                }
+            }
+            jobs.push_back(job);
+        }
+    }
+
     if (!json) {
         std::printf("Offline bench: %g Hz, %d-sample blocks (%.2f ms), %g s each. Share = time in the plug-in / block length.\n\n",
                     request.rate, request.block, request.block * 1000.0 / request.rate, request.seconds);
-        std::printf("%-30s %-10s %-20s %8s %8s %8s %8s\n", "Plug-in", "Kind", "Check", "Mean", "p99", "Max", "Mean us");
+        std::printf("%-40s %-10s %-20s %8s %8s %8s %8s\n", "Plug-in", "Kind", "Check", "Mean", "p99", "Max", "Mean us");
     }
     std::vector<JsonValue> results;
-    for (std::size_t n = 0; n < plugins.size(); ++n) {
-        request.plugin = plugins[n];
-        const std::string tag = std::to_string(n + 1) + "-" + plugins[n].stem().u8string();
-        const BenchRun run = run_bench(host, request, out, tag);
+    for (std::size_t n = 0; n < jobs.size(); ++n) {
+        const Job &job = jobs[n];
+        if (!job.skip.empty()) {
+            if (json) {
+                results.emplace_back(std::vector<std::pair<std::string, JsonValue>>{
+                    {"plugin", JsonValue(job.label)}, {"outcome", JsonValue("skipped")}, {"reason", JsonValue(job.skip)}});
+            } else {
+                std::printf("%-40.40s %-10s %s\n", job.label.c_str(), "", job.skip.c_str());
+            }
+            continue;
+        }
+        const std::string tag = std::to_string(n + 1) + "-" + job.request.plugin.stem().u8string();
+        const BenchRun run = run_bench(host, job.request, out, tag);
         const std::optional<JsonValue> result = parse_json(run.result_json);
         const JsonValue none;
         const JsonValue &r = result ? *result : none;
 
         if (json) {
             results.emplace_back(std::vector<std::pair<std::string, JsonValue>>{
-                {"plugin", JsonValue(plugins[n].u8string())},
+                {"plugin", JsonValue(job.label)},
                 {"outcome", JsonValue(run.outcome)},
                 {"exit_code", JsonValue(static_cast<double>(run.exit_code))},
                 {"last_stage", JsonValue(run.last_stage)},
@@ -420,7 +481,8 @@ int bench_command(int argc, char *argv[]) {
             continue;
         }
 
-        std::string name = r["name"].is_string() ? r["name"].text() : plugins[n].stem().u8string();
+        // From a project the track names the plug-in; otherwise the bench's name for it.
+        const std::string name = !project.empty() || !r["name"].is_string() ? job.label : r["name"].text();
         const std::string kind = r["kind"].is_string() ? r["kind"].text() : "";
         std::string check;
         if (run.outcome == "timed out") check = "timed out at " + run.last_stage;
@@ -440,11 +502,11 @@ int bench_command(int argc, char *argv[]) {
         const bool engaged = r["engagement"].is_string() && r["engagement"].text().rfind("engaged", 0) == 0;
         if (engaged) {
             const JsonValue &share = r["share_of_block"];
-            std::printf("%-30.30s %-10s %-20.20s %7.2f%% %7.2f%% %7.2f%% %8.1f\n", name.c_str(), kind.c_str(), check.c_str(),
+            std::printf("%-40.40s %-10s %-20.20s %7.2f%% %7.2f%% %7.2f%% %8.1f\n", name.c_str(), kind.c_str(), check.c_str(),
                         share["mean"].number() * 100, share["p99"].number() * 100, share["max"].number() * 100,
                         r["time_us"]["mean"].number());
         } else {
-            std::printf("%-30.30s %-10s %s\n", name.c_str(), kind.c_str(), check.c_str());
+            std::printf("%-40.40s %-10s %s\n", name.c_str(), kind.c_str(), check.c_str());
         }
     }
     if (json) {
